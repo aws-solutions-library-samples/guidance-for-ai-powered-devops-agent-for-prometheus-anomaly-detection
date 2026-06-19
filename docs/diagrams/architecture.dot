@@ -1,0 +1,32 @@
+digraph amp {
+  rankdir=LR; bgcolor="white"; pad=0.3; nodesep=0.4; ranksep=0.9;
+  graph [fontname="Helvetica", label=<<B>AI-Powered DevOps Agent for Prometheus — open5gs + Amazon Managed Prometheus</B><BR/><FONT POINT-SIZE="11" COLOR="#5b6b7a">acct 985090322243 · us-east-1 · register-only (no Agent Space created)</FONT>>, labelloc=t];
+  node [fontname="Helvetica", fontsize=11, shape=box, style="rounded,filled", penwidth=1.3, margin="0.14,0.09"];
+  edge [fontname="Helvetica", fontsize=9, color="#5b6b7a"];
+
+  subgraph cluster_eks {
+    label=<<B>Amazon EKS · open5gs-amp-cluster</B>>; style="rounded,filled"; fillcolor="#eef5fb"; color="#2b86c5";
+    core [label=<open5gs 5G core+RAN<BR/><FONT POINT-SIZE="9">AMF·SMF·UPF·… + gNB/UEs</FONT>>, fillcolor="#d6efe0"];
+    promagent [label=<Prometheus agent / ADOT<BR/><FONT POINT-SIZE="9">scrape /metrics · remote_write (SigV4, IRSA)</FONT>>, fillcolor="#d6e7f5"];
+    core -> promagent [label="scrape"];
+  }
+
+  amp [label=<Amazon Managed Prometheus<BR/><FONT POINT-SIZE="9">AMP workspace (CDK) · PromQL</FONT>>, shape=cylinder, fillcolor="#ffe8cc", color="#d9822b"];
+  promagent -> amp [label="remote_write\n(SigV4)", color="#d9822b", penwidth=1.6];
+
+  subgraph cluster_mcp {
+    label=<<B>Prometheus MCP (CDK · from aws-samples)</B>>; style="rounded,filled"; fillcolor="#fff8e6"; color="#b8902a";
+    cog [label=<Cognito<BR/><FONT POINT-SIZE="9">M2M OAuth2 client</FONT>>, fillcolor="#f6ebd2"];
+    apigw [label=<API Gateway<BR/><FONT POINT-SIZE="9">/mcp (JWT) · /health</FONT>>, fillcolor="#f6ebd2"];
+    lam [label=<Prometheus MCP Lambda<BR/><FONT POINT-SIZE="9">5 tools · aps:QueryMetrics…</FONT>>, fillcolor="#f6ebd2"];
+    apigw -> lam; cog -> apigw [style=dashed, label="JWT authz"];
+  }
+  lam -> amp [label="PromQL query", color="#d9822b"];
+
+  agent [label=<AWS DevOps Agent<BR/><FONT POINT-SIZE="9">capability provider (OAuth2)</FONT>>, fillcolor="#e9e0ff", color="#7a5fb0"];
+  agent -> cog [label="1 · OAuth2 token", color="#7a5fb0"];
+  agent -> apigw [label="2 · MCP + JWT", color="#7a5fb0", penwidth=1.6];
+
+  conncdk [label=<agent-connectivity (CDK)<BR/><FONT POINT-SIZE="9">register-service · NO create-agent-space</FONT>>, shape=note, fillcolor="#fdecec", color="#c0392b"];
+  conncdk -> agent [style=dotted, label="registers MCP", color="#c0392b"];
+}
