@@ -1,0 +1,48 @@
+# ── open5gs-amp: ship cluster + open5gs metrics to Amazon Managed Prometheus ──
+amp:
+  remoteWriteUrl: "https://aps-workspaces.us-east-1.amazonaws.com/workspaces/ws-185ff7f8-c698-4d0e-9135-945b03aeccd1/api/v1/remote_write"
+  region: us-east-1
+  # IAM role (IRSA) with aps:RemoteWrite, bound to the Prometheus service account.
+  # Created by deploy/30-eks-open5gs.sh via: eksctl create iamserviceaccount.
+  serviceAccountName: amp-prometheus
+  roleArn: ""   # set at deploy time (eksctl outputs it) or via --set
+
+kube-prometheus-stack:
+  enabled: true
+  grafana:
+    enabled: false          # querying is via AMP + the DevOps Agent MCP, not local Grafana
+  alertmanager:
+    enabled: false
+  prometheus:
+    serviceAccount:
+      create: false
+      name: amp-prometheus   # IRSA SA (aps:RemoteWrite)
+    prometheusSpec:
+      # generic: scrape ALL ServiceMonitors/PodMonitors + annotation-based pods (any workload, incl. open5gs)
+      serviceMonitorSelectorNilUsesHelmValues: false
+      serviceMonitorSelector: {}
+      serviceMonitorNamespaceSelector: {}
+      podMonitorSelectorNilUsesHelmValues: false
+      podMonitorSelector: {}
+      podMonitorNamespaceSelector: {}
+      # ship everything to AMP with SigV4
+      remoteWrite:
+        - url: "https://aps-workspaces.us-east-1.amazonaws.com/workspaces/ws-185ff7f8-c698-4d0e-9135-945b03aeccd1/api/v1/remote_write"
+          sigv4:
+            region: us-east-1
+      additionalScrapeConfigs:
+        - job_name: k8s-pods-annotated
+          kubernetes_sd_configs: [{ role: pod }]
+          relabel_configs:
+            - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+              action: keep
+              regex: "true"
+            - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port, __address__]
+              action: replace
+              regex: (\d+);([^:]+)(?::\d+)?
+              replacement: $2:$1
+              target_label: __address__
+            - source_labels: [__meta_kubernetes_namespace]
+              target_label: namespace
+            - source_labels: [__meta_kubernetes_pod_name]
+              target_label: pod
