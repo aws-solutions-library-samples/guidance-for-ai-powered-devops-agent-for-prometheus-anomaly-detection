@@ -1,0 +1,16 @@
+node_modules/
+cdk.out/
+dist/
+*.js
+*.d.ts
+!jest.config.js
+
+# Vendored Python deps are re-installed at build (deploy/10-deploy-cdk.sh runs pip install -r requirements.txt -t).
+# Keep ONLY the app handler code, not the bundled libraries.
+lambda/*
+!lambda/jwt-authorizer.py
+!lambda/requirements.txt
+lambda-mcp-wrapper/lambda/*
+!lambda-mcp-wrapper/lambda/awslabs/
+!lambda-mcp-wrapper/lambda/*.py
+!lambda-mcp-wrapper/lambda/requirements.txt

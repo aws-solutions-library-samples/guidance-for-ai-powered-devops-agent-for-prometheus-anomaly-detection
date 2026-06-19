@@ -1,0 +1,53 @@
+{
+  "name": "Prometheus MCP Lambda Server",
+  "endpoint": "https://${Token[TOKEN.62]}.execute-api.us-east-1.${Token[AWS.URLSuffix.1]}/${Token[TOKEN.67]}/mcp",
+  "description": "Production-ready Prometheus MCP server deployed as AWS Lambda with API Gateway and Cognito JWT authentication. Provides 5 MCP tools for querying AWS Managed Prometheus: GetAvailableWorkspaces, ExecuteQuery, ExecuteRangeQuery, ListMetrics, and GetServerInfo. Supports natural language queries via Strands Agent integration with 748 available metrics from Kubernetes cluster monitoring.",
+  "authorization_flow": "OAuth Client Credentials",
+  "authorization_configuration": {
+    "client_id": "${Token[TOKEN.25]}",
+    "client_secret": "REPLACE_WITH_ACTUAL_SECRET",
+    "exchange_url": "https://${Token[TOKEN.27]}.auth.us-east-1.amazoncognito.com/oauth2/token",
+    "exchange_parameters": [
+      {
+        "key": "grant_type",
+        "value": "client_credentials"
+      },
+      {
+        "key": "scope",
+        "value": "prometheus-mcp-server/read prometheus-mcp-server/write"
+      }
+    ]
+  },
+  "tools": [
+    {
+      "name": "GetAvailableWorkspaces",
+      "description": "List available Prometheus workspaces in the specified AWS region"
+    },
+    {
+      "name": "ExecuteQuery",
+      "description": "Execute PromQL instant queries against Amazon Managed Prometheus"
+    },
+    {
+      "name": "ExecuteRangeQuery",
+      "description": "Execute PromQL range queries over time periods for trend analysis"
+    },
+    {
+      "name": "ListMetrics",
+      "description": "Get sorted list of all available metric names in Prometheus server"
+    },
+    {
+      "name": "GetServerInfo",
+      "description": "Get Prometheus server configuration and connection information"
+    }
+  ],
+  "deployment_info": {
+    "git_tag": "v0.5.0-lambda-5tools-complete",
+    "region": "us-east-1",
+    "lambda_function_name": "${Token[TOKEN.45]}",
+    "lambda_function_arn": "${Token[TOKEN.48]}",
+    "user_pool_id": "${Token[TOKEN.16]}",
+    "cognito_domain": "${Token[TOKEN.27]}",
+    "api_gateway_id": "${Token[TOKEN.62]}",
+    "deployment_timestamp": "2026-06-19T10:42:41.344Z"
+  }
+}
