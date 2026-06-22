@@ -1,0 +1,19 @@
+- job_name: open5gs-nf
+  fallback_scrape_protocol: PrometheusText0.0.4
+  scrape_interval: 15s
+  kubernetes_sd_configs:
+    - role: pod
+      namespaces: { names: [open5gs] }
+  relabel_configs:
+    - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+      action: keep
+      regex: "true"
+    - source_labels: [__meta_kubernetes_pod_ip]
+      target_label: __address__
+      replacement: "$1:9090"
+    - source_labels: [__meta_kubernetes_pod_label_app]
+      target_label: nf
+    - source_labels: [__meta_kubernetes_namespace]
+      target_label: namespace
+    - source_labels: [__meta_kubernetes_pod_name]
+      target_label: pod

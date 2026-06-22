@@ -1,0 +1,251 @@
+apiVersion: v1
+kind: Namespace
+metadata: {name: open5gs}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: mongodb, namespace: open5gs}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: mongodb}}
+  template:
+    metadata: {labels: {app: mongodb}}
+    spec:
+      containers:
+      - name: mongodb
+        image: public.ecr.aws/a7y4t3f5/telco-buddy/mongo:6.0
+        ports: [{containerPort: 27017}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: mongodb, namespace: open5gs}
+spec: {selector: {app: mongodb}, ports: [{port: 27017, targetPort: 27017}]}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: mongo, namespace: open5gs}
+spec: {type: ExternalName, externalName: mongodb.open5gs.svc.cluster.local}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: nrf, namespace: open5gs, labels: {app: nrf, nf: nrf}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: nrf}}
+  template:
+    metadata: {labels: {app: nrf, nf: nrf}}
+    spec:
+      containers:
+      - name: nrf
+        image: public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6
+        command: ["/opt/open5gs/bin/open5gs-nrfd"]
+        ports: [{containerPort: 7777, protocol: TCP}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: nrf, namespace: open5gs}
+spec: {selector: {app: nrf}, ports: [{port: 7777, targetPort: 7777, protocol: TCP}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: scp, namespace: open5gs, labels: {app: scp, nf: scp}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: scp}}
+  template:
+    metadata: {labels: {app: scp, nf: scp}}
+    spec:
+      containers:
+      - name: scp
+        image: public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6
+        command: ["/opt/open5gs/bin/open5gs-scpd"]
+        ports: [{containerPort: 7777, protocol: TCP}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: scp, namespace: open5gs}
+spec: {selector: {app: scp}, ports: [{port: 7777, targetPort: 7777, protocol: TCP}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: amf, namespace: open5gs, labels: {app: amf, nf: amf}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: amf}}
+  template:
+    metadata: {labels: {app: amf, nf: amf}}
+    spec:
+      containers:
+      - name: amf
+        image: public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6
+        command: ["/opt/open5gs/bin/open5gs-amfd"]
+        ports: [{containerPort: 38412, protocol: SCTP}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: amf, namespace: open5gs}
+spec: {selector: {app: amf}, ports: [{port: 38412, targetPort: 38412, protocol: SCTP}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: smf, namespace: open5gs, labels: {app: smf, nf: smf}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: smf}}
+  template:
+    metadata: {labels: {app: smf, nf: smf}}
+    spec:
+      containers:
+      - name: smf
+        image: public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6
+        command: ["/opt/open5gs/bin/open5gs-smfd"]
+        ports: [{containerPort: 8805, protocol: TCP}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: smf, namespace: open5gs}
+spec: {selector: {app: smf}, ports: [{port: 8805, targetPort: 8805, protocol: TCP}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: upf, namespace: open5gs, labels: {app: upf, nf: upf}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: upf}}
+  template:
+    metadata: {labels: {app: upf, nf: upf}}
+    spec:
+      containers:
+      - name: upf
+        image: public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6
+        command: ["/opt/open5gs/bin/open5gs-upfd"]
+        ports: [{containerPort: 8805, protocol: TCP}]
+        securityContext: {capabilities: {add: [NET_ADMIN]}, privileged: true}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: upf, namespace: open5gs}
+spec: {selector: {app: upf}, ports: [{port: 8805, targetPort: 8805, protocol: TCP}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: ausf, namespace: open5gs, labels: {app: ausf, nf: ausf}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: ausf}}
+  template:
+    metadata: {labels: {app: ausf, nf: ausf}}
+    spec:
+      containers:
+      - name: ausf
+        image: public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6
+        command: ["/opt/open5gs/bin/open5gs-ausfd"]
+        ports: [{containerPort: 7777, protocol: TCP}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: ausf, namespace: open5gs}
+spec: {selector: {app: ausf}, ports: [{port: 7777, targetPort: 7777, protocol: TCP}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: udm, namespace: open5gs, labels: {app: udm, nf: udm}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: udm}}
+  template:
+    metadata: {labels: {app: udm, nf: udm}}
+    spec:
+      containers:
+      - name: udm
+        image: public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6
+        command: ["/opt/open5gs/bin/open5gs-udmd"]
+        ports: [{containerPort: 7777, protocol: TCP}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: udm, namespace: open5gs}
+spec: {selector: {app: udm}, ports: [{port: 7777, targetPort: 7777, protocol: TCP}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: udr, namespace: open5gs, labels: {app: udr, nf: udr}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: udr}}
+  template:
+    metadata: {labels: {app: udr, nf: udr}}
+    spec:
+      containers:
+      - name: udr
+        image: public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6
+        command: ["/opt/open5gs/bin/open5gs-udrd"]
+        ports: [{containerPort: 7777, protocol: TCP}]
+        env: [{name: DB_URI, value: "mongodb://mongodb.open5gs.svc.cluster.local/open5gs"}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: udr, namespace: open5gs}
+spec: {selector: {app: udr}, ports: [{port: 7777, targetPort: 7777, protocol: TCP}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: pcf, namespace: open5gs, labels: {app: pcf, nf: pcf}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: pcf}}
+  template:
+    metadata: {labels: {app: pcf, nf: pcf}}
+    spec:
+      containers:
+      - name: pcf
+        image: public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6
+        command: ["/opt/open5gs/bin/open5gs-pcfd"]
+        ports: [{containerPort: 7777, protocol: TCP}]
+        env: [{name: DB_URI, value: "mongodb://mongodb.open5gs.svc.cluster.local/open5gs"}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: pcf, namespace: open5gs}
+spec: {selector: {app: pcf}, ports: [{port: 7777, targetPort: 7777, protocol: TCP}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: nssf, namespace: open5gs, labels: {app: nssf, nf: nssf}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: nssf}}
+  template:
+    metadata: {labels: {app: nssf, nf: nssf}}
+    spec:
+      containers:
+      - name: nssf
+        image: public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6
+        command: ["/opt/open5gs/bin/open5gs-nssfd"]
+        ports: [{containerPort: 7777, protocol: TCP}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: nssf, namespace: open5gs}
+spec: {selector: {app: nssf}, ports: [{port: 7777, targetPort: 7777, protocol: TCP}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: bsf, namespace: open5gs, labels: {app: bsf, nf: bsf}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: bsf}}
+  template:
+    metadata: {labels: {app: bsf, nf: bsf}}
+    spec:
+      containers:
+      - name: bsf
+        image: public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6
+        command: ["/opt/open5gs/bin/open5gs-bsfd"]
+        ports: [{containerPort: 7777, protocol: TCP}]
+        env: [{name: DB_URI, value: "mongodb://mongodb.open5gs.svc.cluster.local/open5gs"}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: bsf, namespace: open5gs}
+spec: {selector: {app: bsf}, ports: [{port: 7777, targetPort: 7777, protocol: TCP}]}
