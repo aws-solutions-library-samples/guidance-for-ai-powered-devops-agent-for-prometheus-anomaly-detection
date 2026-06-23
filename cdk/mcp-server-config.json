@@ -48,6 +48,6 @@
     "user_pool_id": "${Token[TOKEN.21]}",
     "cognito_domain": "${Token[TOKEN.32]}",
     "api_gateway_id": "${Token[TOKEN.67]}",
-    "deployment_timestamp": "2026-06-23T10:39:26.671Z"
+    "deployment_timestamp": "2026-06-23T11:16:56.255Z"
   }
 }
