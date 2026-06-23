@@ -72,10 +72,37 @@ open5gs NFs (AMF/SMF/UPF) --/metrics:9090--> kube-prometheus-stack (Prometheus a
 
 ## 6. Critical fixes applied (do NOT regress)
 
+### 6a. Multi-NF data-plane fixes (2026-06-23 — PDU sessions / ues_active)
+The multi-NF deployment (2 AMF / 4 UPF / SMF / NSSF with custom configs) had `ues_active=0` /
+no PDU sessions. Root-cause chain (all fixed, all in the custom configmaps):
+1. **PFCP ephemeral-port NAT** — ClusterIP services NAT the UPF→SMF source port, breaking PFCP
+   heartbeats. FIX: make `smf` + `upf1-4` Services **headless** (`clusterIP: None`) → direct
+   pod-IP:8805 both ways. SMF then shows 4 clean PFCP associations.
+2. **NSSF `nrfId` self-reference** — default NSSF `nsi: {dev: eth0}` makes the NSSF return its OWN
+   pod IP as the `nrfId` for SMF discovery → SCP/AMF query the wrong host → 400. FIX: NSSF custom
+   config `nssf.nsi[].addr: nrf.open5gs.svc.cluster.local`.
+3. **SBI advertise = 0.0.0.0 (THE big one)** — custom configs used `sbi: [{addr: 0.0.0.0}]`, so
+   AMF/SMF/NSSF registered `ipv4Addresses:["0.0.0.0"]` in NRF → undiscoverable → AMF gets 400 /
+   "Not supported version [v2]" on `nnssf-nsselection` → `PAYLOAD_NOT_FORWARDED` → no session.
+   Default NFs (AUSF/UDM/etc) use `dev: eth0` so they register the pod IP (that's why REGISTRATION
+   worked but PDU sessions did not). FIX: change all custom NF sbi/pfcp/gtpc/gtpu binds from
+   `addr: 0.0.0.0` to **`dev: eth0`** (binds AND advertises the pod IP). After this, PDU sessions
+   establish: `fivegs_smffunction_sm_sessionnbr` and `ues_active` climb to the UE count.
+4. (Optional) direct-communication: AMF/SMF custom configs use `nrf: {sbi: [{addr: nrf...}]}` and no
+   `scp:` section — direct NRF discovery, avoids SCP version-routing quirks. NSSF must stay running
+   (AMF hard-requires `nnssf-nsselection`; scaling NSSF to 0 → "Session Context is not in SMF").
+
+**REMAINING (N3 throughput):** GTP-U N3 data packets (`fivegs_ep_n3_gtp_*`) still 0 — the gNB↔UPF
+user-plane path / UPF NAT (`iptables MASQUERADE -s 10.45.0.0/16`) needs finishing for actual ping
+throughput. Control plane (sessions/ues_active) is solved.
+
+### 6b. Original single-NF fixes
 1. **`fallback_scrape_protocol`** — Prometheus 3.x rejects open5gs `/metrics` (blank `Content-Type`).
    The installed ServiceMonitor CRD predates `endpoints[].fallbackScrapeProtocol`, so metrics are
    scraped via a raw **`additionalScrapeConfigs`** secret (`manifests/open5gs-scrape.yaml`,
    job `open5gs-nf`, `fallback_scrape_protocol: PrometheusText0.0.4`). Wired into the Prometheus CR.
+   NOTE: secret key must be `open5gs.yaml` (matches the Prometheus CR's additionalScrapeConfigs key);
+   scrape keeps on `__meta_kubernetes_pod_label_nf` and scrapes pod-IP:9090.
 2. **UPF Service must be UDP** — PFCP (8805) + GTP-U (2152) are UDP. The base manifest had TCP, so
    SMF↔UPF PFCP association failed ("No Response. Give up!") and PDU sessions were rejected. The
    `upf` Service is now UDP. (On the *other* live cluster UPF used Multus/direct pod IP, hiding this.)
