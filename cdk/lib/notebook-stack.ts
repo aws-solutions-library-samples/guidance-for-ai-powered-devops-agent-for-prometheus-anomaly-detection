@@ -74,10 +74,16 @@ export class NotebookStack extends cdk.Stack {
       },
     });
 
-    // Lifecycle config: download notebook from S3 on create
+    // Lifecycle config: download notebook from S3 on create + install kubectl
     const onCreateScript = cdk.Fn.base64(`#!/bin/bash
 set -e
 BUCKET="${bucket.bucketName}"
+
+# Install kubectl
+curl -sLO "https://dl.k8s.io/release/v1.31.0/bin/linux/amd64/kubectl"
+chmod +x kubectl && mv kubectl /usr/local/bin/
+
+# Copy notebook files from S3
 aws s3 cp s3://$BUCKET/notebooks/ /home/ec2-user/SageMaker/ --recursive
 chown -R ec2-user:ec2-user /home/ec2-user/SageMaker/
 `);
