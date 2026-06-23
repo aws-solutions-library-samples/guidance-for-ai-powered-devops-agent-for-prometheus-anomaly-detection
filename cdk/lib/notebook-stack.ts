@@ -74,7 +74,9 @@ export class NotebookStack extends cdk.Stack {
       },
     });
 
-    // Lifecycle config: download notebook from S3 on create + install kubectl
+    // Lifecycle config:
+    //  - onCreate: install kubectl + pull notebook from S3 (first boot)
+    //  - onStart:  re-pull latest notebook from S3 every start (Stop/Start refreshes it)
     const onCreateScript = cdk.Fn.base64(`#!/bin/bash
 set -e
 BUCKET="${bucket.bucketName}"
@@ -88,9 +90,25 @@ aws s3 cp s3://$BUCKET/notebooks/ /home/ec2-user/SageMaker/ --recursive
 chown -R ec2-user:ec2-user /home/ec2-user/SageMaker/
 `);
 
+    const onStartScript = cdk.Fn.base64(`#!/bin/bash
+set -e
+BUCKET="${bucket.bucketName}"
+
+# Ensure kubectl is present (in case of AMI changes)
+if [ ! -f /usr/local/bin/kubectl ]; then
+  curl -sLO "https://dl.k8s.io/release/v1.31.0/bin/linux/amd64/kubectl"
+  chmod +x kubectl && mv kubectl /usr/local/bin/
+fi
+
+# Always pull the LATEST notebook from S3 on start (refreshes after updates)
+aws s3 cp s3://$BUCKET/notebooks/ /home/ec2-user/SageMaker/ --recursive
+chown -R ec2-user:ec2-user /home/ec2-user/SageMaker/
+`);
+
     const lifecycleConfig = new sagemaker.CfnNotebookInstanceLifecycleConfig(this, 'LifecycleConfig', {
       notebookInstanceLifecycleConfigName: 'open5gs-rcf-demo-lcc',
       onCreate: [{ content: onCreateScript }],
+      onStart: [{ content: onStartScript }],
     });
 
     // SageMaker Notebook Instance
