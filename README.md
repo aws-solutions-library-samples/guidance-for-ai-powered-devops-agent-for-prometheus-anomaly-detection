@@ -16,6 +16,14 @@ Detect 5G network anomalies using **RCF (Random Cut Forest)** on Amazon Managed 
 
 **Demo scenario**: A bad config push crashes AMF1 → 50 users lose registration → RCF detects → correlate with pod restarts to find root cause.
 
+## Architecture
+
+![Architecture](docs/diagrams/architecture.svg)
+
+## RCF Data Flow
+
+![RCF Dataflow](docs/diagrams/rcf-dataflow.svg)
+
 ## Deploy (4 steps)
 
 ### Prerequisites
