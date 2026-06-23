@@ -58,12 +58,15 @@ scp:
       port: 7777
 ' --dry-run=client -o yaml | kubectl apply -f -
 
-    # Restart AMF1 to pick up the broken config
-    kubectl rollout restart deploy/amf1 -n $NAMESPACE
+    # Delete AMF1 pods so they restart with the broken config.
+    # IMPORTANT: use delete (not 'rollout restart') — rollout restart creates a
+    # surge pod while the OLD healthy pod keeps serving, so subscribers never drop.
+    # Deleting forces the ReplicaSet to recreate with the broken config → crash loop.
+    kubectl delete pod -n $NAMESPACE -l app=amf1 --wait=false
     echo ""
     echo "✗ Bad config pushed. AMF1 will enter CrashLoopBackOff."
     echo "  Watch: kubectl get pods -n $NAMESPACE -l app=amf1 -w"
-    echo "  RCF should fire within 30-60s as registeredsubnbr drops."
+    echo "  RCF should fire within 30-60s as registeredsubnbr drops 100→50."
     ;;
 
   fix)
@@ -115,10 +118,17 @@ scp:
       port: 7777
 ' --dry-run=client -o yaml | kubectl apply -f -
 
-    kubectl rollout restart deploy/amf1 -n $NAMESPACE
+    # Delete crashing AMF1 pods so they restart with the valid config
+    kubectl delete pod -n $NAMESPACE -l app=amf1 --wait=false
+    echo "  Waiting for AMF1 to become healthy..."
+    kubectl rollout status deploy/amf1 -n $NAMESPACE --timeout=90s 2>&1 || true
+
+    # Restart the gNBs that connect to AMF1 (TAC=1) so their UEs re-register.
+    # Without this, the 50 UEs stay deregistered until their next attach attempt.
+    echo "  Restarting gnb1a/gnb1b to force UE re-registration..."
+    kubectl rollout restart statefulset/gnb1a statefulset/gnb1b -n $NAMESPACE
     echo ""
-    echo "✓ Valid config restored. AMF1 recovering."
-    echo "  UEs will re-register within 30-60s."
+    echo "✓ Valid config restored. AMF1 healthy; UEs re-registering (60-90s to reach 100)."
     ;;
 
   status)
