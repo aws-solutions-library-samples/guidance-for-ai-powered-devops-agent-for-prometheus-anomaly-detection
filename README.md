@@ -1,43 +1,95 @@
-# AI-Powered DevOps Agent for Prometheus Anomaly Detection
+# 5G Anomaly Detection with AWS Managed Prometheus
 
-The **AWS DevOps Agent** performing anomaly detection on **5G telco metrics** via **Amazon Managed
-Prometheus (AMP)**. A real open5gs 5G core + UERANSIM (on EKS) emit live registration/session metrics;
-they land in AMP and are queryable by the DevOps Agent through the awslabs **Prometheus MCP server**.
+Detect 5G network anomalies using **RCF (Random Cut Forest)** on Amazon Managed Prometheus. A live open5gs 5G core on EKS generates real registration/session metrics; RCF learns the baseline and fires when infrastructure faults cause subscriber drops.
+
+## What It Does
 
 ```
-open5gs NFs (AMF/SMF/UPF) --/metrics--> kube-prometheus-stack
-   --remote_write (SigV4/IRSA)--> AMP workspace
-   <--SigV4-- Prometheus MCP (Lambda) <--OAuth2 / API Gateway-- AWS DevOps Agent
+100 UEs → 4 gNBs → 2 AMFs → SMF → UPF (open5gs on EKS)
+                      ↓ metrics
+              Amazon Managed Prometheus (AMP)
+                      ↓ RCF anomaly detection
+              Score spikes when subscribers drop
+                      ↓
+              DevOps Agent investigates via Prometheus MCP
 ```
 
-## 📖 Start here
-- **[`docs/CONTEXT.md`](docs/CONTEXT.md)** — full state, live resource IDs, fixes applied, resume checklist (read first).
-- **[`setup_guide.md`](setup_guide.md)** — deploy from scratch + verify + troubleshoot + teardown.
-- **[`docs/diagrams/architecture.svg`](docs/diagrams/architecture.svg)** — architecture diagram.
+**Demo scenario**: A bad config push crashes AMF1 → 50 users lose registration → RCF detects → correlate with pod restarts to find root cause.
 
-## Status (2026-06-23)
-✅ End-to-end proven with **live 5G data**: open5gs core (pod-network, no Multus) + UERANSIM UE
-registers and establishes a PDU session; `fivegs_amffunction_*` (registration) and
-`fivegs_smffunction_*` (sessions) metrics flow to AMP and are queryable via the DevOps Agent MCP.
+## Deploy (4 steps)
 
-## Quick deploy
+### Prerequisites
+- AWS CLI configured with a profile (account with EKS, AMP, SageMaker permissions)
+- Node.js 18+, CDK CLI (`npm install -g aws-cdk`)
+- kubectl, eksctl, Helm 3
+
+### 1. Deploy CDK (AMP + MCP + Notebook)
 ```bash
-export AWS_PROFILE=proactive-rca-demo            # account 985090322243, us-east-1
-cd cdk && ../deploy/10-deploy-cdk.sh             # AMP + Prometheus MCP (Cognito/Lambda/APIGW)
-./deploy/20-register-agent.sh                    # register MCP with DevOps Agent (register-only)
-./deploy/30-eks-open5gs.sh                       # EKS + Prometheus agent remote_write -> AMP
-./deploy/50-open5gs.sh                           # open5gs core + UERANSIM + 5G metrics
+export AWS_PROFILE=your-profile
+cd cdk && npm install
+cdk bootstrap
+cdk deploy --all --require-approval never
 ```
 
-## Layout
-| Path | Purpose |
-|---|---|
-| `cdk/` | AMP workspace + vendored Prometheus MCP (Cognito/Lambda/API GW) + register-only connectivity |
-| `deploy/` | Ordered deploy scripts `10`→`50` + `40-verify-amp.sh` |
-| `helm/open5gs-amp/` | kube-prometheus-stack values (remote_write to AMP via IRSA) |
-| `manifests/` | `open5gs-core.yaml`, `open5gs-scrape.yaml`, `ueransim.yaml`, `provision-subscriber.sh` |
-| `docs/` | `CONTEXT.md`, diagrams |
+Creates: AMP workspace, RCF anomaly detector, alert rules, Prometheus MCP (Lambda/API GW/Cognito), SageMaker Notebook.
 
-## Security
-No public dashboards. The only public surface is the **OAuth2-authenticated API Gateway** MCP endpoint.
-Prometheus/Grafana are ClusterIP only. See `~/.kiro/steering/aws-security-guardrails.md`.
+### 2. Deploy EKS + Prometheus
+```bash
+./deploy/30-eks-open5gs.sh
+```
+
+Creates: EKS cluster (3 nodes), kube-prometheus-stack with remote_write to AMP.
+
+### 3. Deploy 5G Core + 100 UEs
+```bash
+./deploy/50-open5gs.sh
+```
+
+Creates: open5gs NFs (2 AMFs, 4 UPFs, shared CP), 100 UERANSIM UEs, provisions subscribers.
+
+### 4. Open the Demo Notebook
+Go to **SageMaker → Notebook Instances → open5gs-rcf-anomaly-demo → Open Jupyter**
+
+Run `rcf-anomaly-detection-demo.ipynb` — it walks through:
+1. Verify baseline (100 UEs registered, RCF score = 0)
+2. Inject fault (bad config → AMF1 crashes)
+3. Observe anomaly (RCF score spikes, 50 users drop)
+4. Root cause analysis (correlate with pod restarts)
+5. Recovery (fix config → users re-register)
+
+## Quick Fault Injection (CLI)
+
+```bash
+# Break AMF1 (50 users lose service)
+./manifests/fault-inject-amf1.sh break
+
+# Check RCF score via Prometheus MCP
+# anomaly_detector:score{alias="5g-registered-subscribers"} > 0.1
+
+# Fix it
+./manifests/fault-inject-amf1.sh fix
+```
+
+## Architecture
+
+| Layer | Components |
+|---|---|
+| **RAN** | 4 gNBs (UERANSIM StatefulSets, 25 UEs each) |
+| **Core** | 2 AMFs (TAC partitioned), SMF, 4 UPFs, NRF/AUSF/UDM/UDR/PCF/NSSF/BSF |
+| **Monitoring** | kube-prometheus-stack → remote_write (SigV4/IRSA) → AMP |
+| **Detection** | RCF anomaly detector on `sum(fivegs_amffunction_rm_registeredsubnbr)` |
+| **Access** | Prometheus MCP (OAuth2/API GW) for DevOps Agent; SageMaker Notebook for humans |
+
+## Teardown
+
+```bash
+kubectl delete -f manifests/ueransim-multi.yaml
+kubectl delete -f manifests/open5gs-core-multi.yaml
+eksctl delete cluster -f /tmp/amp-cluster/cluster.yaml
+cd cdk && cdk destroy --all
+```
+
+## Docs
+- [`docs/CONTEXT.md`](docs/CONTEXT.md) — live resource IDs, critical fixes, resume checklist
+- [`docs/DEMO-RUNBOOK.md`](docs/DEMO-RUNBOOK.md) — step-by-step demo with correlation queries
+- [`setup_guide.md`](setup_guide.md) — detailed deploy/verify/troubleshoot guide

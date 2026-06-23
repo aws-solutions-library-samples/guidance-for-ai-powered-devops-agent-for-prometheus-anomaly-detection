@@ -1,12 +1,12 @@
 {
   "name": "Prometheus MCP Lambda Server",
-  "endpoint": "https://${Token[TOKEN.62]}.execute-api.us-east-1.${Token[AWS.URLSuffix.1]}/${Token[TOKEN.67]}/mcp",
+  "endpoint": "https://${Token[TOKEN.67]}.execute-api.us-east-1.${Token[AWS.URLSuffix.3]}/${Token[TOKEN.72]}/mcp",
   "description": "Production-ready Prometheus MCP server deployed as AWS Lambda with API Gateway and Cognito JWT authentication. Provides 5 MCP tools for querying AWS Managed Prometheus: GetAvailableWorkspaces, ExecuteQuery, ExecuteRangeQuery, ListMetrics, and GetServerInfo. Supports natural language queries via Strands Agent integration with 748 available metrics from Kubernetes cluster monitoring.",
   "authorization_flow": "OAuth Client Credentials",
   "authorization_configuration": {
-    "client_id": "${Token[TOKEN.25]}",
+    "client_id": "${Token[TOKEN.30]}",
     "client_secret": "REPLACE_WITH_ACTUAL_SECRET",
-    "exchange_url": "https://${Token[TOKEN.27]}.auth.us-east-1.amazoncognito.com/oauth2/token",
+    "exchange_url": "https://${Token[TOKEN.32]}.auth.us-east-1.amazoncognito.com/oauth2/token",
     "exchange_parameters": [
       {
         "key": "grant_type",
@@ -43,11 +43,11 @@
   "deployment_info": {
     "git_tag": "v0.5.0-lambda-5tools-complete",
     "region": "us-east-1",
-    "lambda_function_name": "${Token[TOKEN.45]}",
-    "lambda_function_arn": "${Token[TOKEN.48]}",
-    "user_pool_id": "${Token[TOKEN.16]}",
-    "cognito_domain": "${Token[TOKEN.27]}",
-    "api_gateway_id": "${Token[TOKEN.62]}",
-    "deployment_timestamp": "2026-06-19T10:42:41.344Z"
+    "lambda_function_name": "${Token[TOKEN.50]}",
+    "lambda_function_arn": "${Token[TOKEN.53]}",
+    "user_pool_id": "${Token[TOKEN.21]}",
+    "cognito_domain": "${Token[TOKEN.32]}",
+    "api_gateway_id": "${Token[TOKEN.67]}",
+    "deployment_timestamp": "2026-06-23T10:39:26.671Z"
   }
 }

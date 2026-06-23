@@ -1,0 +1,581 @@
+apiVersion: v1
+kind: Namespace
+metadata: {name: open5gs}
+---
+# ─── MongoDB (PVC-backed) ───
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: mongodb-data, namespace: open5gs}
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: gp3
+  resources: {requests: {storage: 5Gi}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: mongodb, namespace: open5gs}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: mongodb}}
+  template:
+    metadata: {labels: {app: mongodb}}
+    spec:
+      containers:
+      - name: mongodb
+        image: public.ecr.aws/a7y4t3f5/telco-buddy/mongo:6.0
+        ports: [{containerPort: 27017}]
+        volumeMounts: [{name: data, mountPath: /data/db}]
+      volumes: [{name: data, persistentVolumeClaim: {claimName: mongodb-data}}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: mongodb, namespace: open5gs}
+spec: {selector: {app: mongodb}, ports: [{port: 27017}]}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: mongo, namespace: open5gs}
+spec: {type: ExternalName, externalName: mongodb.open5gs.svc.cluster.local}
+---
+# ─── Shared Control Plane NFs (unchanged, use image defaults) ───
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: nrf, namespace: open5gs, labels: {nf: nrf}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: nrf}}
+  template:
+    metadata: {labels: {app: nrf, nf: nrf}}
+    spec:
+      containers:
+      - {name: nrf, image: "public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6", command: ["/opt/open5gs/bin/open5gs-nrfd"], ports: [{containerPort: 7777}]}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: nrf, namespace: open5gs}
+spec: {selector: {app: nrf}, ports: [{port: 7777}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: scp, namespace: open5gs, labels: {nf: scp}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: scp}}
+  template:
+    metadata: {labels: {app: scp, nf: scp}}
+    spec:
+      containers:
+      - {name: scp, image: "public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6", command: ["/opt/open5gs/bin/open5gs-scpd"], ports: [{containerPort: 7777}]}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: scp, namespace: open5gs}
+spec: {selector: {app: scp}, ports: [{port: 7777}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: ausf, namespace: open5gs, labels: {nf: ausf}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: ausf}}
+  template:
+    metadata: {labels: {app: ausf, nf: ausf}}
+    spec:
+      containers:
+      - {name: ausf, image: "public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6", command: ["/opt/open5gs/bin/open5gs-ausfd"], ports: [{containerPort: 7777}]}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: ausf, namespace: open5gs}
+spec: {selector: {app: ausf}, ports: [{port: 7777}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: udm, namespace: open5gs, labels: {nf: udm}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: udm}}
+  template:
+    metadata: {labels: {app: udm, nf: udm}}
+    spec:
+      containers:
+      - {name: udm, image: "public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6", command: ["/opt/open5gs/bin/open5gs-udmd"], ports: [{containerPort: 7777}]}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: udm, namespace: open5gs}
+spec: {selector: {app: udm}, ports: [{port: 7777}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: udr, namespace: open5gs, labels: {nf: udr}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: udr}}
+  template:
+    metadata: {labels: {app: udr, nf: udr}}
+    spec:
+      containers:
+      - name: udr
+        image: public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6
+        command: ["/opt/open5gs/bin/open5gs-udrd"]
+        ports: [{containerPort: 7777}]
+        env: [{name: DB_URI, value: "mongodb://mongodb.open5gs.svc.cluster.local/open5gs"}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: udr, namespace: open5gs}
+spec: {selector: {app: udr}, ports: [{port: 7777}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: pcf, namespace: open5gs, labels: {nf: pcf}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: pcf}}
+  template:
+    metadata: {labels: {app: pcf, nf: pcf}}
+    spec:
+      containers:
+      - name: pcf
+        image: public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6
+        command: ["/opt/open5gs/bin/open5gs-pcfd"]
+        ports: [{containerPort: 7777}]
+        env: [{name: DB_URI, value: "mongodb://mongodb.open5gs.svc.cluster.local/open5gs"}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: pcf, namespace: open5gs}
+spec: {selector: {app: pcf}, ports: [{port: 7777}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: nssf, namespace: open5gs, labels: {nf: nssf}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: nssf}}
+  template:
+    metadata: {labels: {app: nssf, nf: nssf}}
+    spec:
+      containers:
+      - {name: nssf, image: "public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6", command: ["/opt/open5gs/bin/open5gs-nssfd"], ports: [{containerPort: 7777}]}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: nssf, namespace: open5gs}
+spec: {selector: {app: nssf}, ports: [{port: 7777}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: bsf, namespace: open5gs, labels: {nf: bsf}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: bsf}}
+  template:
+    metadata: {labels: {app: bsf, nf: bsf}}
+    spec:
+      containers:
+      - name: bsf
+        image: public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6
+        command: ["/opt/open5gs/bin/open5gs-bsfd"]
+        ports: [{containerPort: 7777}]
+        env: [{name: DB_URI, value: "mongodb://mongodb.open5gs.svc.cluster.local/open5gs"}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: bsf, namespace: open5gs}
+spec: {selector: {app: bsf}, ports: [{port: 7777}]}
+---
+# ─── AMF-1 (TAC=1, serves gNB-1a and gNB-1b) ───
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: amf1-config, namespace: open5gs}
+data:
+  amf.yaml: |
+    amf:
+      sbi:
+        - addr: 0.0.0.0
+          port: 7777
+      ngap:
+        - addr: 0.0.0.0
+      guami:
+        - plmn_id: {mcc: 999, mnc: 70}
+          amf_id: {region: 2, set: 1}
+      tai:
+        - plmn_id: {mcc: 999, mnc: 70}
+          tac: 1
+      plmn_support:
+        - plmn_id: {mcc: 999, mnc: 70}
+          s_nssai:
+            - sst: 1
+      security:
+        integrity_order: [NIA2, NIA1, NIA0]
+        ciphering_order: [NEA0, NEA1, NEA2]
+      network_name:
+        full: Open5GS
+      amf_name: open5gs-amf1
+    scp:
+      sbi:
+        - addr: scp.open5gs.svc.cluster.local
+          port: 7777
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: amf1, namespace: open5gs, labels: {nf: amf}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: amf1}}
+  template:
+    metadata: {labels: {app: amf1, nf: amf}}
+    spec:
+      containers:
+      - name: amf
+        image: public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6
+        command: ["/opt/open5gs/bin/open5gs-amfd", "-c", "/config/amf.yaml"]
+        ports: [{containerPort: 38412, protocol: SCTP}, {containerPort: 9090}]
+        volumeMounts: [{name: cfg, mountPath: /config}]
+      volumes: [{name: cfg, configMap: {name: amf1-config}}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: amf1, namespace: open5gs}
+spec:
+  selector: {app: amf1}
+  ports:
+  - {name: ngap, port: 38412, protocol: SCTP}
+  - {name: metrics, port: 9090}
+---
+# ─── AMF-2 (TAC=2, serves gNB-2a and gNB-2b) ───
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: amf2-config, namespace: open5gs}
+data:
+  amf.yaml: |
+    amf:
+      sbi:
+        - addr: 0.0.0.0
+          port: 7777
+      ngap:
+        - addr: 0.0.0.0
+      guami:
+        - plmn_id: {mcc: 999, mnc: 70}
+          amf_id: {region: 2, set: 2}
+      tai:
+        - plmn_id: {mcc: 999, mnc: 70}
+          tac: 2
+      plmn_support:
+        - plmn_id: {mcc: 999, mnc: 70}
+          s_nssai:
+            - sst: 1
+      security:
+        integrity_order: [NIA2, NIA1, NIA0]
+        ciphering_order: [NEA0, NEA1, NEA2]
+      network_name:
+        full: Open5GS
+      amf_name: open5gs-amf2
+    scp:
+      sbi:
+        - addr: scp.open5gs.svc.cluster.local
+          port: 7777
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: amf2, namespace: open5gs, labels: {nf: amf}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: amf2}}
+  template:
+    metadata: {labels: {app: amf2, nf: amf}}
+    spec:
+      containers:
+      - name: amf
+        image: public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6
+        command: ["/opt/open5gs/bin/open5gs-amfd", "-c", "/config/amf.yaml"]
+        ports: [{containerPort: 38412, protocol: SCTP}, {containerPort: 9090}]
+        volumeMounts: [{name: cfg, mountPath: /config}]
+      volumes: [{name: cfg, configMap: {name: amf2-config}}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: amf2, namespace: open5gs}
+spec:
+  selector: {app: amf2}
+  ports:
+  - {name: ngap, port: 38412, protocol: SCTP}
+  - {name: metrics, port: 9090}
+---
+# ─── SMF (single, routes to 4 UPFs by DNN) ───
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: smf-config, namespace: open5gs}
+data:
+  smf.yaml: |
+    smf:
+      sbi:
+        - addr: 0.0.0.0
+          port: 7777
+      pfcp:
+        - addr: 0.0.0.0
+      gtpu:
+        - addr: 0.0.0.0
+      subnet:
+        - addr: 10.45.0.1/16
+          dnn: internet
+        - addr: 10.46.0.1/16
+          dnn: internet2
+        - addr: 10.47.0.1/16
+          dnn: iot
+        - addr: 10.48.0.1/16
+          dnn: edge
+      dns:
+        - 8.8.8.8
+        - 8.8.4.4
+      mtu: 1400
+      freeDiameter: /opt/open5gs/etc/freeDiameter/smf.conf
+    scp:
+      sbi:
+        - addr: scp.open5gs.svc.cluster.local
+          port: 7777
+    upf:
+      pfcp:
+        - addr: upf1.open5gs.svc.cluster.local
+          dnn: [internet]
+        - addr: upf2.open5gs.svc.cluster.local
+          dnn: [internet2]
+        - addr: upf3.open5gs.svc.cluster.local
+          dnn: [iot]
+        - addr: upf4.open5gs.svc.cluster.local
+          dnn: [edge]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: smf, namespace: open5gs, labels: {nf: smf}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: smf}}
+  template:
+    metadata: {labels: {app: smf, nf: smf}}
+    spec:
+      containers:
+      - name: smf
+        image: public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6
+        command: ["/opt/open5gs/bin/open5gs-smfd", "-c", "/config/smf.yaml"]
+        ports: [{containerPort: 8805, protocol: UDP}, {containerPort: 9090}]
+        volumeMounts: [{name: cfg, mountPath: /config}]
+      volumes: [{name: cfg, configMap: {name: smf-config}}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: smf, namespace: open5gs}
+spec:
+  selector: {app: smf}
+  ports:
+  - {name: pfcp, port: 8805, protocol: UDP}
+  - {name: metrics, port: 9090}
+---
+# ─── UPF-1 (DNN: internet, subnet 10.45.0.0/16) ───
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: upf1-config, namespace: open5gs}
+data:
+  upf.yaml: |
+    upf:
+      pfcp:
+        - addr: 0.0.0.0
+      gtpu:
+        - addr: 0.0.0.0
+      subnet:
+        - addr: 10.45.0.1/16
+          dnn: internet
+          dev: ogstun
+    smf:
+      pfcp:
+        - addr: smf.open5gs.svc.cluster.local
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: upf1, namespace: open5gs, labels: {nf: upf}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: upf1}}
+  template:
+    metadata: {labels: {app: upf1, nf: upf}}
+    spec:
+      containers:
+      - name: upf
+        image: public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6
+        command: ["/opt/open5gs/bin/open5gs-upfd", "-c", "/config/upf.yaml"]
+        ports: [{containerPort: 8805, protocol: UDP}, {containerPort: 2152, protocol: UDP}, {containerPort: 9090}]
+        securityContext: {capabilities: {add: [NET_ADMIN]}, privileged: true}
+        volumeMounts: [{name: cfg, mountPath: /config}]
+      volumes: [{name: cfg, configMap: {name: upf1-config}}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: upf1, namespace: open5gs}
+spec:
+  selector: {app: upf1}
+  ports:
+  - {name: pfcp, port: 8805, protocol: UDP}
+  - {name: gtpu, port: 2152, protocol: UDP}
+  - {name: metrics, port: 9090}
+---
+# ─── UPF-2 (DNN: internet2, subnet 10.46.0.0/16) ───
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: upf2-config, namespace: open5gs}
+data:
+  upf.yaml: |
+    upf:
+      pfcp:
+        - addr: 0.0.0.0
+      gtpu:
+        - addr: 0.0.0.0
+      subnet:
+        - addr: 10.46.0.1/16
+          dnn: internet2
+          dev: ogstun
+    smf:
+      pfcp:
+        - addr: smf.open5gs.svc.cluster.local
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: upf2, namespace: open5gs, labels: {nf: upf}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: upf2}}
+  template:
+    metadata: {labels: {app: upf2, nf: upf}}
+    spec:
+      containers:
+      - name: upf
+        image: public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6
+        command: ["/opt/open5gs/bin/open5gs-upfd", "-c", "/config/upf.yaml"]
+        ports: [{containerPort: 8805, protocol: UDP}, {containerPort: 2152, protocol: UDP}, {containerPort: 9090}]
+        securityContext: {capabilities: {add: [NET_ADMIN]}, privileged: true}
+        volumeMounts: [{name: cfg, mountPath: /config}]
+      volumes: [{name: cfg, configMap: {name: upf2-config}}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: upf2, namespace: open5gs}
+spec:
+  selector: {app: upf2}
+  ports:
+  - {name: pfcp, port: 8805, protocol: UDP}
+  - {name: gtpu, port: 2152, protocol: UDP}
+  - {name: metrics, port: 9090}
+---
+# ─── UPF-3 (DNN: iot, subnet 10.47.0.0/16) ───
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: upf3-config, namespace: open5gs}
+data:
+  upf.yaml: |
+    upf:
+      pfcp:
+        - addr: 0.0.0.0
+      gtpu:
+        - addr: 0.0.0.0
+      subnet:
+        - addr: 10.47.0.1/16
+          dnn: iot
+          dev: ogstun
+    smf:
+      pfcp:
+        - addr: smf.open5gs.svc.cluster.local
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: upf3, namespace: open5gs, labels: {nf: upf}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: upf3}}
+  template:
+    metadata: {labels: {app: upf3, nf: upf}}
+    spec:
+      containers:
+      - name: upf
+        image: public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6
+        command: ["/opt/open5gs/bin/open5gs-upfd", "-c", "/config/upf.yaml"]
+        ports: [{containerPort: 8805, protocol: UDP}, {containerPort: 2152, protocol: UDP}, {containerPort: 9090}]
+        securityContext: {capabilities: {add: [NET_ADMIN]}, privileged: true}
+        volumeMounts: [{name: cfg, mountPath: /config}]
+      volumes: [{name: cfg, configMap: {name: upf3-config}}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: upf3, namespace: open5gs}
+spec:
+  selector: {app: upf3}
+  ports:
+  - {name: pfcp, port: 8805, protocol: UDP}
+  - {name: gtpu, port: 2152, protocol: UDP}
+  - {name: metrics, port: 9090}
+---
+# ─── UPF-4 (DNN: edge, subnet 10.48.0.0/16) ───
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: upf4-config, namespace: open5gs}
+data:
+  upf.yaml: |
+    upf:
+      pfcp:
+        - addr: 0.0.0.0
+      gtpu:
+        - addr: 0.0.0.0
+      subnet:
+        - addr: 10.48.0.1/16
+          dnn: edge
+          dev: ogstun
+    smf:
+      pfcp:
+        - addr: smf.open5gs.svc.cluster.local
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: upf4, namespace: open5gs, labels: {nf: upf}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: upf4}}
+  template:
+    metadata: {labels: {app: upf4, nf: upf}}
+    spec:
+      containers:
+      - name: upf
+        image: public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6
+        command: ["/opt/open5gs/bin/open5gs-upfd", "-c", "/config/upf.yaml"]
+        ports: [{containerPort: 8805, protocol: UDP}, {containerPort: 2152, protocol: UDP}, {containerPort: 9090}]
+        securityContext: {capabilities: {add: [NET_ADMIN]}, privileged: true}
+        volumeMounts: [{name: cfg, mountPath: /config}]
+      volumes: [{name: cfg, configMap: {name: upf4-config}}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: upf4, namespace: open5gs}
+spec:
+  selector: {app: upf4}
+  ports:
+  - {name: pfcp, port: 8805, protocol: UDP}
+  - {name: gtpu, port: 2152, protocol: UDP}
+  - {name: metrics, port: 9090}
+---
+# ─── Keep legacy "amf" service pointing to AMF-1 for backward compat ───
+apiVersion: v1
+kind: Service
+metadata: {name: amf, namespace: open5gs}
+spec:
+  selector: {app: amf1}
+  ports:
+  - {name: ngap, port: 38412, protocol: SCTP}
+---
+# ─── Keep legacy "upf" service pointing to UPF-1 ───
+apiVersion: v1
+kind: Service
+metadata: {name: upf, namespace: open5gs}
+spec:
+  selector: {app: upf1}
+  ports:
+  - {name: pfcp, port: 8805, protocol: UDP}
+  - {name: gtpu, port: 2152, protocol: UDP}

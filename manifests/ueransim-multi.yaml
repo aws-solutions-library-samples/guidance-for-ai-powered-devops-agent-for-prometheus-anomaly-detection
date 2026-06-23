@@ -1,0 +1,330 @@
+---
+# UERANSIM Multi-gNB deployment: 4 gNBs × 25 UEs = 100 UEs
+# gNB-1a (TAC=1, AMF1, DNN=internet, IMSI 001-025)
+# gNB-1b (TAC=1, AMF1, DNN=internet2, IMSI 026-050)
+# gNB-2a (TAC=2, AMF2, DNN=iot, IMSI 051-075)
+# gNB-2b (TAC=2, AMF2, DNN=edge, IMSI 076-100)
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: ueransim-gnb1a-config, namespace: open5gs}
+data:
+  gnb.yaml: |
+    mcc: '999'
+    mnc: '70'
+    nci: '0x000000010'
+    idLength: 32
+    tac: 1
+    linkIp: 127.0.0.1
+    ngapIp: POD_IP
+    gtpIp: POD_IP
+    amfConfigs:
+      - address: amf1.open5gs.svc.cluster.local
+        port: 38412
+    slices:
+      - sst: 1
+    ignoreStreamIds: true
+  dnn: internet
+  imsi_start: "1"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: ueransim-gnb1b-config, namespace: open5gs}
+data:
+  gnb.yaml: |
+    mcc: '999'
+    mnc: '70'
+    nci: '0x000000020'
+    idLength: 32
+    tac: 1
+    linkIp: 127.0.0.1
+    ngapIp: POD_IP
+    gtpIp: POD_IP
+    amfConfigs:
+      - address: amf1.open5gs.svc.cluster.local
+        port: 38412
+    slices:
+      - sst: 1
+    ignoreStreamIds: true
+  dnn: internet2
+  imsi_start: "26"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: ueransim-gnb2a-config, namespace: open5gs}
+data:
+  gnb.yaml: |
+    mcc: '999'
+    mnc: '70'
+    nci: '0x000000030'
+    idLength: 32
+    tac: 2
+    linkIp: 127.0.0.1
+    ngapIp: POD_IP
+    gtpIp: POD_IP
+    amfConfigs:
+      - address: amf2.open5gs.svc.cluster.local
+        port: 38412
+    slices:
+      - sst: 1
+    ignoreStreamIds: true
+  dnn: iot
+  imsi_start: "51"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: ueransim-gnb2b-config, namespace: open5gs}
+data:
+  gnb.yaml: |
+    mcc: '999'
+    mnc: '70'
+    nci: '0x000000040'
+    idLength: 32
+    tac: 2
+    linkIp: 127.0.0.1
+    ngapIp: POD_IP
+    gtpIp: POD_IP
+    amfConfigs:
+      - address: amf2.open5gs.svc.cluster.local
+        port: 38412
+    slices:
+      - sst: 1
+    ignoreStreamIds: true
+  dnn: edge
+  imsi_start: "76"
+---
+# Shared UE template and traffic gen script
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: ueransim-ue-shared, namespace: open5gs}
+data:
+  ue-template.yaml: |
+    supi: 'imsi-IMSI_PLACEHOLDER'
+    mcc: '999'
+    mnc: '70'
+    protectionScheme: 0
+    homeNetworkPublicKeyId: 0
+    routingIndicator: '0000'
+    key: '465B5CE8B199B49FAA5F0A2EE238A6BC'
+    op: 'E8ED289DEBA952E4283B54E88E6183CA'
+    opType: 'OPC'
+    amf: '8000'
+    imei: '356938035643803'
+    imeiSv: '4370816125816151'
+    gnbSearchList:
+      - 127.0.0.1
+    uacAic: { mps: false, mcs: false }
+    uacAcc: { normalClass: 0, class11: false, class12: false, class13: false, class14: false, class15: false }
+    sessions:
+      - type: 'IPv4'
+        apn: 'DNN_PLACEHOLDER'
+        slice: { sst: 1 }
+    configured-nssai:
+      - sst: 1
+    default-nssai:
+      - sst: 1
+        sd: 1
+    integrity: { IA1: true, IA2: true, IA3: true }
+    ciphering: { EA1: true, EA2: true, EA3: true }
+    integrityMaxRate: { uplink: 'full', downlink: 'full' }
+  start-ue.sh: |
+    #!/bin/sh
+    ORDINAL=$(echo $POD_NAME | grep -o '[0-9]*$')
+    IMSI_NUM=$((IMSI_START + ORDINAL))
+    IMSI=$(printf "999700000000%03d" $IMSI_NUM)
+    echo "UE ordinal=$ORDINAL IMSI=$IMSI DNN=$DNN"
+    sed -e "s/IMSI_PLACEHOLDER/$IMSI/" -e "s/DNN_PLACEHOLDER/$DNN/" /shared/ue-template.yaml > /tmp/ue.yaml
+    sleep 20
+    exec nr-ue -c /tmp/ue.yaml
+  start-gnb.sh: |
+    #!/bin/sh
+    sed "s/POD_IP/$POD_IP/g" /config/gnb.yaml > /tmp/gnb.yaml
+    exec nr-gnb -c /tmp/gnb.yaml
+  traffic-gen.sh: |
+    #!/bin/sh
+    echo "Waiting for uesimtun0..."
+    while ! ip link show uesimtun0 >/dev/null 2>&1; do sleep 2; done
+    echo "uesimtun0 up — starting traffic"
+    while true; do
+      ping -I uesimtun0 -c 3 -i 1 8.8.8.8 2>/dev/null || true
+      sleep 5
+    done
+---
+# ─── gNB-1a StatefulSet (TAC=1, AMF1, DNN=internet, 25 UEs) ───
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: {name: gnb1a, namespace: open5gs, labels: {app: gnb1a, nf: ueransim}}
+spec:
+  serviceName: gnb1a
+  replicas: 25
+  selector: {matchLabels: {app: gnb1a}}
+  template:
+    metadata: {labels: {app: gnb1a, nf: ueransim}}
+    spec:
+      containers:
+      - name: gnb
+        image: gradiant/ueransim:3.2.6
+        env:
+        - {name: POD_IP, valueFrom: {fieldRef: {fieldPath: status.podIP}}}
+        command: ["/bin/sh", "/shared/start-gnb.sh"]
+        volumeMounts:
+        - {name: cfg, mountPath: /config}
+        - {name: shared, mountPath: /shared}
+      - name: ue
+        image: gradiant/ueransim:3.2.6
+        securityContext: {capabilities: {add: [NET_ADMIN]}, privileged: true}
+        env:
+        - {name: POD_NAME, valueFrom: {fieldRef: {fieldPath: metadata.name}}}
+        - {name: IMSI_START, value: "1"}
+        - {name: DNN, value: "internet"}
+        command: ["/bin/sh", "/shared/start-ue.sh"]
+        volumeMounts:
+        - {name: shared, mountPath: /shared}
+      - name: traffic
+        image: gradiant/ueransim:3.2.6
+        securityContext: {capabilities: {add: [NET_ADMIN]}, privileged: true}
+        command: ["/bin/sh", "/shared/traffic-gen.sh"]
+        volumeMounts:
+        - {name: shared, mountPath: /shared}
+      volumes:
+      - {name: cfg, configMap: {name: ueransim-gnb1a-config}}
+      - {name: shared, configMap: {name: ueransim-ue-shared}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: gnb1a, namespace: open5gs}
+spec: {clusterIP: None, selector: {app: gnb1a}, ports: [{port: 4997, name: ue}]}
+---
+# ─── gNB-1b StatefulSet (TAC=1, AMF1, DNN=internet2, 25 UEs) ───
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: {name: gnb1b, namespace: open5gs, labels: {app: gnb1b, nf: ueransim}}
+spec:
+  serviceName: gnb1b
+  replicas: 25
+  selector: {matchLabels: {app: gnb1b}}
+  template:
+    metadata: {labels: {app: gnb1b, nf: ueransim}}
+    spec:
+      containers:
+      - name: gnb
+        image: gradiant/ueransim:3.2.6
+        env:
+        - {name: POD_IP, valueFrom: {fieldRef: {fieldPath: status.podIP}}}
+        command: ["/bin/sh", "/shared/start-gnb.sh"]
+        volumeMounts:
+        - {name: cfg, mountPath: /config}
+        - {name: shared, mountPath: /shared}
+      - name: ue
+        image: gradiant/ueransim:3.2.6
+        securityContext: {capabilities: {add: [NET_ADMIN]}, privileged: true}
+        env:
+        - {name: POD_NAME, valueFrom: {fieldRef: {fieldPath: metadata.name}}}
+        - {name: IMSI_START, value: "26"}
+        - {name: DNN, value: "internet2"}
+        command: ["/bin/sh", "/shared/start-ue.sh"]
+        volumeMounts:
+        - {name: shared, mountPath: /shared}
+      - name: traffic
+        image: gradiant/ueransim:3.2.6
+        securityContext: {capabilities: {add: [NET_ADMIN]}, privileged: true}
+        command: ["/bin/sh", "/shared/traffic-gen.sh"]
+        volumeMounts:
+        - {name: shared, mountPath: /shared}
+      volumes:
+      - {name: cfg, configMap: {name: ueransim-gnb1b-config}}
+      - {name: shared, configMap: {name: ueransim-ue-shared}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: gnb1b, namespace: open5gs}
+spec: {clusterIP: None, selector: {app: gnb1b}, ports: [{port: 4997, name: ue}]}
+---
+# ─── gNB-2a StatefulSet (TAC=2, AMF2, DNN=iot, 25 UEs) ───
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: {name: gnb2a, namespace: open5gs, labels: {app: gnb2a, nf: ueransim}}
+spec:
+  serviceName: gnb2a
+  replicas: 25
+  selector: {matchLabels: {app: gnb2a}}
+  template:
+    metadata: {labels: {app: gnb2a, nf: ueransim}}
+    spec:
+      containers:
+      - name: gnb
+        image: gradiant/ueransim:3.2.6
+        env:
+        - {name: POD_IP, valueFrom: {fieldRef: {fieldPath: status.podIP}}}
+        command: ["/bin/sh", "/shared/start-gnb.sh"]
+        volumeMounts:
+        - {name: cfg, mountPath: /config}
+        - {name: shared, mountPath: /shared}
+      - name: ue
+        image: gradiant/ueransim:3.2.6
+        securityContext: {capabilities: {add: [NET_ADMIN]}, privileged: true}
+        env:
+        - {name: POD_NAME, valueFrom: {fieldRef: {fieldPath: metadata.name}}}
+        - {name: IMSI_START, value: "51"}
+        - {name: DNN, value: "iot"}
+        command: ["/bin/sh", "/shared/start-ue.sh"]
+        volumeMounts:
+        - {name: shared, mountPath: /shared}
+      - name: traffic
+        image: gradiant/ueransim:3.2.6
+        securityContext: {capabilities: {add: [NET_ADMIN]}, privileged: true}
+        command: ["/bin/sh", "/shared/traffic-gen.sh"]
+        volumeMounts:
+        - {name: shared, mountPath: /shared}
+      volumes:
+      - {name: cfg, configMap: {name: ueransim-gnb2a-config}}
+      - {name: shared, configMap: {name: ueransim-ue-shared}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: gnb2a, namespace: open5gs}
+spec: {clusterIP: None, selector: {app: gnb2a}, ports: [{port: 4997, name: ue}]}
+---
+# ─── gNB-2b StatefulSet (TAC=2, AMF2, DNN=edge, 25 UEs) ───
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: {name: gnb2b, namespace: open5gs, labels: {app: gnb2b, nf: ueransim}}
+spec:
+  serviceName: gnb2b
+  replicas: 25
+  selector: {matchLabels: {app: gnb2b}}
+  template:
+    metadata: {labels: {app: gnb2b, nf: ueransim}}
+    spec:
+      containers:
+      - name: gnb
+        image: gradiant/ueransim:3.2.6
+        env:
+        - {name: POD_IP, valueFrom: {fieldRef: {fieldPath: status.podIP}}}
+        command: ["/bin/sh", "/shared/start-gnb.sh"]
+        volumeMounts:
+        - {name: cfg, mountPath: /config}
+        - {name: shared, mountPath: /shared}
+      - name: ue
+        image: gradiant/ueransim:3.2.6
+        securityContext: {capabilities: {add: [NET_ADMIN]}, privileged: true}
+        env:
+        - {name: POD_NAME, valueFrom: {fieldRef: {fieldPath: metadata.name}}}
+        - {name: IMSI_START, value: "76"}
+        - {name: DNN, value: "edge"}
+        command: ["/bin/sh", "/shared/start-ue.sh"]
+        volumeMounts:
+        - {name: shared, mountPath: /shared}
+      - name: traffic
+        image: gradiant/ueransim:3.2.6
+        securityContext: {capabilities: {add: [NET_ADMIN]}, privileged: true}
+        command: ["/bin/sh", "/shared/traffic-gen.sh"]
+        volumeMounts:
+        - {name: shared, mountPath: /shared}
+      volumes:
+      - {name: cfg, configMap: {name: ueransim-gnb2b-config}}
+      - {name: shared, configMap: {name: ueransim-ue-shared}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: gnb2b, namespace: open5gs}
+spec: {clusterIP: None, selector: {app: gnb2b}, ports: [{port: 4997, name: ue}]}
