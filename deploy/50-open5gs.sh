@@ -51,3 +51,8 @@ for q in ['count({job="open5gs-nf"})','count({__name__=~"fivegs_amffunction.*"})
     print(f"AMP {q:42} -> {res[0]['value'][1] if res else 0} series")
 PY
 echo "DONE — open5gs 5G metrics are in AMP and queryable via the DevOps Agent MCP."
+
+echo "=== 5. provision subscriber + deploy UERANSIM gNB+UE (live 5G traffic) ==="
+bash "$HERE/manifests/provision-subscriber.sh"
+kubectl apply -f "$HERE/manifests/ueransim.yaml"
+echo "UE should register + establish PDU session; metrics fivegs_amffunction_* / fivegs_smffunction_* flow to AMP."
