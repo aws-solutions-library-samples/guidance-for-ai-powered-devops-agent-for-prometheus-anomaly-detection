@@ -91,10 +91,31 @@ no PDU sessions. Root-cause chain (all fixed, all in the custom configmaps):
 4. (Optional) direct-communication: AMF/SMF custom configs use `nrf: {sbi: [{addr: nrf...}]}` and no
    `scp:` section — direct NRF discovery, avoids SCP version-routing quirks. NSSF must stay running
    (AMF hard-requires `nnssf-nsselection`; scaling NSSF to 0 → "Session Context is not in SMF").
+5. **UPF `ogstun` DOWN → N3 user-plane dead (2026-06-24)** — running `open5gs-upfd -c custom.yaml`
+   as the container command BYPASSES the image entrypoint that creates/brings-up the `ogstun` TUN
+   device. open5gs-upfd creates ogstun but leaves it `state DOWN` with no IP → UPF receives N3
+   uplink but `ogs_tun_write() failed (Input/output error)` → 100% packet loss. FIX: a **postStart
+   lifecycle hook** on each UPF container (waits for ogstun, then `ip addr add <GW>/16 dev ogstun;
+   ip link set ogstun up; sysctl -w net.ipv4.ip_forward=1; iptables -t nat -A POSTROUTING -s
+   <subnet> ! -o ogstun -j MASQUERADE`). GWs: upf1 10.45.0.1, upf2 10.46.0.1, upf3 10.47.0.1,
+   upf4 10.48.0.1. Persistent across restarts. After this: UE ping to gateway AND 8.8.8.8 = 0% loss.
 
-**REMAINING (N3 throughput):** GTP-U N3 data packets (`fivegs_ep_n3_gtp_*`) still 0 — the gNB↔UPF
-user-plane path / UPF NAT (`iptables MASQUERADE -s 10.45.0.0/16`) needs finishing for actual ping
-throughput. Control plane (sessions/ues_active) is solved.
+**TRAFFIC METRIC NOTE:** open5gs 2.6.6 exports `fivegs_ep_n3_gtp_indatapktn3upf` /
+`outdatapktn3upf` but they **do NOT increment** in the UPF data path (build limitation — stay 0
+even with confirmed 0%-loss traffic). Use **container network metrics** instead for throughput:
+`sum(rate(container_network_receive_bytes_total{namespace="open5gs",pod=~"upf.*"}[2m]))` (cAdvisor →
+AMP). Sessions/bearers ARE accurate: `fivegs_upffunction_upf_sessionnbr` (250/UPF at 1000 UEs).
+
+### 6c. Scale: 1000 UEs / 100 gNBs (2026-06-24)
+- `manifests/ueransim-multi.yaml`: 4 StatefulSets × 25 pods, each pod runs `nr-ue -n 10` = **1000 UEs**.
+  Per-pod base IMSI = `IMSI_START + ordinal*10`; IMSI format `99970000000%04d` (0001-1000).
+  DNN split: gnb1a internet (0001-0250), gnb1b internet2 (0251-0500), gnb2a iot (0501-0750),
+  gnb2b edge (0751-1000) → 250 sessions each on upf1-4. traffic-gen pings DNN gateway from all 10
+  uesimtun0-9 (drives real N3 traffic, no internet dependency).
+- `manifests/provision-1000-subscribers.sh`: single mongosh `bulkWrite` (fast) for 1000 subs / 4 DNNs.
+- **VERIFIED:** 1000 registered, ~1000 sessions (250/UPF), ~150 KB/s user-plane traffic across UPFs.
+- Capacity on 3× t3.xlarge: ~18-30% CPU, ~15% mem. Nodegroup `ng-1` scales 0↔3 for cost
+  (`aws eks update-nodegroup-config --scaling-config minSize=3,maxSize=4,desiredSize=3`).
 
 ### 6b. Original single-NF fixes
 1. **`fallback_scrape_protocol`** — Prometheus 3.x rejects open5gs `/metrics` (blank `Content-Type`).

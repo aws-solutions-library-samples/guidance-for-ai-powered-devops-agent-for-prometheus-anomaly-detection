@@ -5,7 +5,7 @@ Detect 5G network anomalies using **RCF (Random Cut Forest)** on Amazon Managed 
 ## What It Does
 
 ```
-100 UEs → 4 gNBs → 2 AMFs → SMF → UPF (open5gs on EKS)
+1000 UEs → 100 gNBs → 2 AMFs → SMF → 4 UPFs (open5gs on EKS)
                       ↓ metrics
               Amazon Managed Prometheus (AMP)
                       ↓ RCF anomaly detection
@@ -53,7 +53,7 @@ Creates: EKS cluster (3 nodes), kube-prometheus-stack with remote_write to AMP.
 ./deploy/50-open5gs.sh
 ```
 
-Creates: open5gs NFs (2 AMFs, 4 UPFs, shared CP), 100 UERANSIM UEs, provisions subscribers.
+Creates: open5gs NFs (2 AMFs, 4 UPFs, shared CP), 1000 UERANSIM UEs across 4 DNNs, provisions subscribers.
 
 ### 4. Open the Demo Notebook
 Go to **SageMaker → Notebook Instances → open5gs-rcf-anomaly-demo → Open Jupyter**
@@ -82,7 +82,7 @@ Run `rcf-anomaly-detection-demo.ipynb` — it walks through:
 
 | Layer | Components |
 |---|---|
-| **RAN** | 4 gNBs (UERANSIM StatefulSets, 25 UEs each) |
+| **RAN** | 100 gNBs (UERANSIM StatefulSets, 10 UEs each = 1000 UEs) |
 | **Core** | 2 AMFs (TAC partitioned), SMF, 4 UPFs, NRF/AUSF/UDM/UDR/PCF/NSSF/BSF |
 | **Monitoring** | kube-prometheus-stack → remote_write (SigV4/IRSA) → AMP |
 | **Detection** | RCF anomaly detector on `sum(fivegs_amffunction_rm_registeredsubnbr)` |
