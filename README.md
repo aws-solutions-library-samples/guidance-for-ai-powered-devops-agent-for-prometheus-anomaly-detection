@@ -113,5 +113,4 @@ cd cdk && cdk destroy --all
 ## Docs
 - [`docs/CONTEXT.md`](docs/CONTEXT.md) — live resource IDs, critical fixes, resume checklist
 - [`docs/DEMO-RUNBOOK.md`](docs/DEMO-RUNBOOK.md) — step-by-step demo with correlation queries
-- [`docs/ONPREM-GRAFANA-DEVOPS-AGENT-RUNBOOK.md`](docs/ONPREM-GRAFANA-DEVOPS-AGENT-RUNBOOK.md) — connect an on-prem Grafana to AWS DevOps Agent via a Cloudflare-tunnel relay VM
 - [`setup_guide.md`](setup_guide.md) — detailed deploy/verify/troubleshoot guide
