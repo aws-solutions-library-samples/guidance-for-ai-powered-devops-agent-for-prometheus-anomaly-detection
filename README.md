@@ -88,19 +88,6 @@ Run `rcf-anomaly-detection-demo.ipynb` — it walks through:
 | **Detection** | RCF anomaly detector on `sum(fivegs_amffunction_rm_registeredsubnbr)` |
 | **Access** | Prometheus MCP (OAuth2/API GW) for DevOps Agent; SageMaker Notebook for humans |
 
-## In-Cluster Grafana (optional dashboards)
-
-A standalone Grafana (ClusterIP, **not** public) that queries AMP via SigV4/IRSA, with a pre-built
-5G dashboard (registration, sessions/UPF, user-plane throughput, RCF score + bands, AMF restarts).
-
-```bash
-kubectl apply -f manifests/grafana-incluster.yaml          # deploy (IRSA role: open5gs-grafana-amp-query)
-kubectl -n monitoring port-forward svc/grafana 3000:3000   # access (no public endpoint)
-# open http://localhost:3000  (admin / open5gs-demo-2026)  -> dashboard "open5gs 5G — RCF Anomaly Detection"
-```
-
-Regenerate the manifest/dashboard: `python3 manifests/generate-grafana.py manifests/grafana-incluster.yaml`
-
 ## Teardown
 
 ```bash
