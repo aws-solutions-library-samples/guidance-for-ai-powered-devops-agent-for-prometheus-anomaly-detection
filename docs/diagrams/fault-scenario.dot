@@ -1,0 +1,16 @@
+digraph fault_scenario {
+  rankdir=LR; bgcolor="white"; pad=0.3; nodesep=0.5; ranksep=1.1;
+  graph [fontname="Helvetica", label=<<B>RCF Anomaly Detection — Fault &amp; Recovery (1000 UEs)</B>>, labelloc=t, fontsize=15];
+  node [fontname="Helvetica", fontsize=11, shape=box, style="rounded,filled", penwidth=1.4, margin="0.2,0.12"];
+  edge [fontname="Helvetica", fontsize=10, color="#5b6b7a", penwidth=1.4];
+
+  healthy [label=<<B>1 · HEALTHY</B><BR/><FONT POINT-SIZE="10">1000 UEs registered<BR/>AMF1: 500 · AMF2: 500<BR/>RCF score = 0</FONT>>, fillcolor="#d6efe0", color="#2e8b57"];
+  fault   [label=<<B>2 · FAULT</B><BR/><FONT POINT-SIZE="10">Bad config push to AMF1<BR/>(missing time.t3512)<BR/>AMF1 CrashLoopBackOff<BR/><B>500 UEs drop</B> · RCF score = 1.0</FONT>>, fillcolor="#fdecec", color="#c0392b"];
+  detect  [label=<<B>3 · DETECT + RCA</B><BR/><FONT POINT-SIZE="10">RCF score &gt; 0.1 &#8594; alert fires<BR/>Correlate: AMF1 restarts &#8593;<BR/>Blast radius = TAC=1 only<BR/>AMF2 unaffected</FONT>>, fillcolor="#fff3d6", color="#d9822b"];
+  recover [label=<<B>4 · RECOVERY</B><BR/><FONT POINT-SIZE="10">Roll back amf1-config<BR/>AMF1 healthy + gNBs restart<BR/>UEs re-register &#8594; 1000<BR/>RCF score = 0</FONT>>, fillcolor="#d6e7f5", color="#2b86c5"];
+
+  healthy -> fault   [label="bad deploy"];
+  fault   -> detect  [label="< 30s", color="#c0392b", penwidth=1.8];
+  detect  -> recover [label="rollback"];
+  recover -> healthy [label="steady state", style=dashed];
+}
