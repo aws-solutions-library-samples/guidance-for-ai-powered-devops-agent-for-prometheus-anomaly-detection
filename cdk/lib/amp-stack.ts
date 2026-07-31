@@ -1,27 +1,67 @@
 import * as cdk from 'aws-cdk-lib';
 import * as aps from 'aws-cdk-lib/aws-aps';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as path from 'path';
 import { Construct } from 'constructs';
 
 /**
- * Amazon Managed Prometheus (AMP) workspace + RCF anomaly detection.
+ * Amazon Managed Prometheus (AMP) workspace + RCF anomaly detection + automated RCA (scenario 2b).
  *
  * Resources:
  * - AMP Workspace (metric store for open5gs remote_write + MCP Lambda queries)
+ *   with an Alertmanager definition that routes the RCF alert to SNS.
  * - RCF Anomaly Detector on sum(fivegs_amffunction_rm_registeredsubnbr)
  * - Alert rule: fires when RCF score > 0.1 (onset detection, for: 0s)
+ * - Automated RCA pipeline (2b): SNS topic -> Lambda bridge that runs the RCA correlation
+ *   (identifies which AMF dropped via AMP) and optionally forwards an incident to the
+ *   AWS DevOps Agent webhook (set the URL via `-c devopsAgentWebhookUrl=https://...`).
  */
 export class AmpStack extends cdk.Stack {
   public readonly workspaceId: string;
   public readonly workspaceArn: string;
   public readonly prometheusUrl: string;
   public readonly remoteWriteUrl: string;
+  public readonly rcaTopicArn: string;
 
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    // ─── AMP Workspace ───
+    // ─── Automated-RCA config (2b) ───
+    // Fixed SNS topic name so the workspace Alertmanager definition can reference a
+    // deterministic ARN without creating a workspace->topic dependency cycle.
+    const rcaTopicName = 'open5gs-rcf-rca-trigger';
+    const rcaTopicArn = `arn:aws:sns:${this.region}:${this.account}:${rcaTopicName}`;
+    // Optional DevOps Agent webhook: `cdk deploy -c devopsAgentWebhookUrl=https://...`
+    const devopsAgentWebhookUrl = (this.node.tryGetContext('devopsAgentWebhookUrl') as string) || '';
+
+    // Alertmanager config: route every firing alert (only RCF5GRegistrationDrop exists) to SNS.
+    const alertManagerConfig = `alertmanager_config: |
+  route:
+    receiver: 'rca-sns'
+    group_by: ['alertname']
+    group_wait: 30s
+    group_interval: 1m
+    repeat_interval: 5m
+  receivers:
+    - name: 'rca-sns'
+      sns_configs:
+        - topic_arn: ${rcaTopicArn}
+          sigv4:
+            region: ${this.region}
+          subject: 'RCF 5G registration anomaly'
+          message: |
+            {{ range .Alerts }}alertname={{ .Labels.alertname }} state={{ .Status }} alias={{ .Labels.alias }}
+            {{ .Annotations.summary }}
+            {{ end }}
+`;
+
+    // ─── AMP Workspace (+ Alertmanager routing to SNS) ───
     const ws = new aps.CfnWorkspace(this, 'Open5gsAmp', {
       alias: 'open5gs-amp',
+      alertManagerDefinition: alertManagerConfig,
     });
 
     this.workspaceId = ws.attrWorkspaceId;
@@ -64,11 +104,60 @@ export class AmpStack extends cdk.Stack {
       data: alertRulesYaml,
     });
 
+    // ─── Automated RCA pipeline (2b): SNS topic -> Lambda bridge ───
+    const rcaTopic = new sns.Topic(this, 'RcaTriggerTopic', {
+      topicName: rcaTopicName,
+      displayName: 'open5gs RCF RCA trigger',
+    });
+    this.rcaTopicArn = rcaTopic.topicArn;
+
+    // Allow AMP (this workspace only) to publish alert notifications to the topic.
+    rcaTopic.addToResourcePolicy(new iam.PolicyStatement({
+      sid: 'AllowAMPPublish',
+      effect: iam.Effect.ALLOW,
+      principals: [new iam.ServicePrincipal('aps.amazonaws.com')],
+      actions: ['sns:Publish'],
+      resources: [rcaTopic.topicArn],
+      conditions: {
+        ArnEquals: { 'aws:SourceArn': ws.attrArn },
+        StringEquals: { 'aws:SourceAccount': this.account },
+      },
+    }));
+
+    // RCA bridge Lambda (dependency-free: bundled botocore SigV4 + urllib).
+    const rcaFn = new lambda.Function(this, 'RcaBridge', {
+      functionName: 'open5gs-rcf-rca',
+      runtime: lambda.Runtime.PYTHON_3_12,
+      handler: 'handler.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda-rca')),
+      timeout: cdk.Duration.seconds(30),
+      memorySize: 256,
+      description: 'Runs RCA on the RCF alert and optionally forwards to the DevOps Agent webhook',
+      environment: {
+        AMP_WORKSPACE_ID: ws.attrWorkspaceId,
+        DEVOPS_AGENT_WEBHOOK_URL: devopsAgentWebhookUrl,
+      },
+    });
+
+    // Least-privilege: query only this AMP workspace.
+    rcaFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['aps:QueryMetrics', 'aps:GetSeries', 'aps:GetLabels', 'aps:GetMetricMetadata'],
+      resources: [ws.attrArn],
+    }));
+
+    // SNS -> Lambda (LambdaSubscription adds the invoke permission automatically).
+    rcaTopic.addSubscription(new subscriptions.LambdaSubscription(rcaFn));
+
     // ─── Outputs ───
     new cdk.CfnOutput(this, 'WorkspaceId', { value: this.workspaceId });
     new cdk.CfnOutput(this, 'WorkspaceArn', { value: this.workspaceArn });
     new cdk.CfnOutput(this, 'PrometheusQueryUrl', { value: this.prometheusUrl });
     new cdk.CfnOutput(this, 'RemoteWriteUrl', { value: this.remoteWriteUrl });
     new cdk.CfnOutput(this, 'RcfDetectorAlias', { value: '5g-registered-subscribers' });
+    new cdk.CfnOutput(this, 'RcaTopicArn', { value: rcaTopic.topicArn });
+    new cdk.CfnOutput(this, 'RcaLambdaName', { value: rcaFn.functionName });
+    new cdk.CfnOutput(this, 'DevopsAgentWebhook', {
+      value: devopsAgentWebhookUrl ? 'configured' : 'not set (deploy with -c devopsAgentWebhookUrl=https://...)',
+    });
   }
 }
