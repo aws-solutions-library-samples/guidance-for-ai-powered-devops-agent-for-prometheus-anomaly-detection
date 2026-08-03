@@ -23,16 +23,16 @@ open5gs NFs (AMF/SMF/UPF) --/metrics:9090--> kube-prometheus-stack (Prometheus a
 
 | Item | Value |
 |---|---|
-| AWS account | `985090322243` |
-| CLI profile | `proactive-rca-demo` |
+| AWS account | `YOUR_ACCOUNT_ID` |
+| CLI profile | `YOUR_AWS_PROFILE` |
 | Region | `us-east-1` |
 
 ## 3. Live resources (control-plane — persistent)
 
 | Resource | ID / value |
 |---|---|
-| **AMP workspace** | `ws-185ff7f8-c698-4d0e-9135-945b03aeccd1` |
-| AMP query URL | `https://aps-workspaces.us-east-1.amazonaws.com/workspaces/ws-185ff7f8-c698-4d0e-9135-945b03aeccd1` |
+| **AMP workspace** | `YOUR_AMP_WORKSPACE_ID` |
+| AMP query URL | `https://aps-workspaces.us-east-1.amazonaws.com/workspaces/YOUR_AMP_WORKSPACE_ID` |
 | AMP remote_write | `…/api/v1/remote_write` |
 | **MCP endpoint** | `https://qjvbzggmf4.execute-api.us-east-1.amazonaws.com/prod/mcp` |
 | Cognito user pool | `us-east-1_h6wlcZKPP` |
@@ -51,7 +51,7 @@ open5gs NFs (AMF/SMF/UPF) --/metrics:9090--> kube-prometheus-stack (Prometheus a
 | Nodegroup | `ng-1` — 2× t3.xlarge, private subnets |
 | Node IAM role | `eksctl-open5gs-amp-cluster-nodegro-NodeInstanceRole-qKJHtn13OQyx` |
 | Auth mode | `API_AND_CONFIG_MAP` (node access entry type `EC2_LINUX`, group `system:nodes`) |
-| API endpoint | public+private; `publicAccessCidrs` = `3/5/13/15/18/52/54.0.0.0/8` + NAT `3.220.222.73/32` |
+| API endpoint | public+private; `publicAccessCidrs` = `3/5/13/15/18/52/54.0.0.0/8` + NAT `YOUR_ADMIN_IP/32` |
 | Default StorageClass | `gp3` (EBS CSI addon ACTIVE) |
 | IRSA SA for remote_write | `amp-prometheus` (ns `monitoring`) w/ `AmazonPrometheusRemoteWriteAccess` |
 | Config file | `/tmp/amp-cluster/cluster.yaml` (eksctl) — minSize=2 (but see §7 idle-scale) |
@@ -138,7 +138,7 @@ The account's idle-automation **scales `ng-1` to 0 (and resets minSize to 0)** o
 your corporate **egress IP rotates** across AWS /8 blocks. On resume:
 
 ```bash
-export AWS_PROFILE=proactive-rca-demo; R=us-east-1
+export AWS_PROFILE=YOUR_AWS_PROFILE; R=us-east-1
 aws eks update-kubeconfig --region $R --name open5gs-amp-cluster   # pin context!
 # 1. scale nodes back
 aws eks update-nodegroup-config --region $R --cluster-name open5gs-amp-cluster \
@@ -154,7 +154,7 @@ kubectl rollout restart deploy/ueransim -n open5gs
 
 - **Developer agent** (`~/.kiro/agents/developer.json`) now includes the **`prometheus`** MCP server
   (`awslabs.prometheus-mcp-server@latest`, `--url` AMP workspace, `--region us-east-1`,
-  `--profile proactive-rca-demo`). Loads on next agent start. This is the local/direct-SigV4 path.
+  `--profile YOUR_AWS_PROFILE`). Loads on next agent start. This is the local/direct-SigV4 path.
 - The **remote/OAuth2** path (Cognito → API GW → Lambda → AMP) is the one registered with the managed
   DevOps Agent (serviceId in §3). Get a token from the Token URL with the m2m client, then
   `POST {mcp endpoint}` JSON-RPC `tools/call ExecuteQuery`.
@@ -173,7 +173,7 @@ Vendored Python deps for the MCP Lambda are **gitignored** (Code Defender false-
 `cryptography`); `deploy/10-deploy-cdk.sh` reinstalls them via `requirements.txt`.
 
 ## 10. Cost note
-EKS cluster + AMP run in `985090322243` (billable). Nodes idle-scale to 0 when idle. Tear down with
+EKS cluster + AMP run in `YOUR_ACCOUNT_ID` (billable). Nodes idle-scale to 0 when idle. Tear down with
 `eksctl delete cluster -f /tmp/amp-cluster/cluster.yaml` + `cdk destroy` (in `cdk/`) when done with the demo.
 
 ## 11. Status / remaining (optional)

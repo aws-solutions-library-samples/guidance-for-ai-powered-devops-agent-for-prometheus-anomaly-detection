@@ -3,9 +3,9 @@
 Single source of truth for deploying this stack. See `docs/CONTEXT.md` for live IDs + handoff state.
 
 ## Prerequisites
-- AWS profile `proactive-rca-demo` (account `985090322243`), region `us-east-1`
+- AWS profile `YOUR_AWS_PROFILE` (account `YOUR_ACCOUNT_ID`), region `us-east-1`
 - `eksctl`, `kubectl`, `helm`, `aws` CLI, `uvx`/`uv`, Node 18+ (CDK), Python 3.10+
-- `export AWS_PROFILE=proactive-rca-demo`
+- `export AWS_PROFILE=YOUR_AWS_PROFILE`
 
 ## Deploy order
 
@@ -41,7 +41,7 @@ and deploys UERANSIM (`manifests/ueransim.yaml`).
 
 ## Verify
 ```bash
-export AWS_PROFILE=proactive-rca-demo
+export AWS_PROFILE=YOUR_AWS_PROFILE
 aws eks update-kubeconfig --region us-east-1 --name open5gs-amp-cluster   # pin context
 
 # pods

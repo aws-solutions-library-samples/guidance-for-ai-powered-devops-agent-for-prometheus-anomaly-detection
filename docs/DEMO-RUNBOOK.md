@@ -42,7 +42,7 @@
 
 ### Prerequisites
 ```bash
-export AWS_PROFILE=proactive-rca-demo
+export AWS_PROFILE=YOUR_AWS_PROFILE
 aws eks update-kubeconfig --region us-east-1 --name open5gs-amp-cluster
 ```
 
@@ -142,7 +142,7 @@ sum by (pod) (rate(container_network_receive_bytes_total{namespace="open5gs", po
 
 | Resource | ID |
 |---|---|
-| Workspace | `ws-185ff7f8-c698-4d0e-9135-945b03aeccd1` |
+| Workspace | `YOUR_AMP_WORKSPACE_ID` |
 | RCF Detector alias | `5g-registered-subscribers` |
 | Alert Rule NS | `rcf-anomaly-alerts` |
 | Alert name | `RCF5GRegistrationDrop` (score > 0.1) |
