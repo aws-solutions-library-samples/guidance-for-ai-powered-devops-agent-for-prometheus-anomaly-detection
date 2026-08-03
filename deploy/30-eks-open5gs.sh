@@ -2,7 +2,7 @@
 # 30-eks-open5gs.sh — on the EKS cluster: create AMP-remote-write IRSA, deploy open5gs,
 # and deploy kube-prometheus-stack (agent) that scrapes everything and remote_writes to AMP.
 set -euo pipefail
-: "${AWS_PROFILE:=proactive-rca-demo}"; export AWS_PROFILE
+: "${AWS_PROFILE:=default}"; export AWS_PROFILE
 : "${AWS_REGION:=us-east-1}"
 : "${CLUSTER:=open5gs-amp-cluster}"
 HERE="$(cd "$(dirname "$0")" && pwd)"

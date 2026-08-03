@@ -5,7 +5,7 @@
 #
 # Prereqs: 30-eks-open5gs.sh already ran (cluster + kube-prometheus-stack remote_writing to AMP).
 set -euo pipefail
-export AWS_PROFILE="${AWS_PROFILE:-proactive-rca-demo}"
+export AWS_PROFILE="${AWS_PROFILE:-default}"
 R="${AWS_REGION:-us-east-1}"
 CLUSTER="${CLUSTER:-open5gs-amp-cluster}"
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
@@ -37,7 +37,7 @@ kubectl patch prometheus "$PROM" -n monitoring --type merge \
 
 echo "=== 4. wait + verify open5gs metrics reach AMP ==="
 sleep 100
-WS="${AMP_WORKSPACE_ID:-ws-185ff7f8-c698-4d0e-9135-945b03aeccd1}"
+WS="${AMP_WORKSPACE_ID:-$(aws amp list-workspaces --alias open5gs-amp --region "${AWS_REGION:-us-east-1}" --query 'workspaces[0].workspaceId' --output text)}"
 python3 - "$R" "$WS" <<'PY'
 import sys,boto3,requests
 from botocore.auth import SigV4Auth; from botocore.awsrequest import AWSRequest

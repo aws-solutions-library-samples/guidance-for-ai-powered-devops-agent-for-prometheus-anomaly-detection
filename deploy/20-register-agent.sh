@@ -2,7 +2,7 @@
 # Register the Prometheus MCP (API Gateway) as a DevOps Agent capability provider (OAuth2, register-only).
 # Reads CDK stack outputs + Cognito secret at runtime; NEVER creates an Agent Space.
 set -euo pipefail
-: "${AWS_PROFILE:=proactive-rca-demo}"; export AWS_PROFILE
+: "${AWS_PROFILE:=default}"; export AWS_PROFILE
 : "${AWS_REGION:=us-east-1}"
 out(){ aws cloudformation describe-stacks --region "$AWS_REGION" --stack-name "$1" --query "Stacks[0].Outputs[?OutputKey=='$2'].OutputValue" --output text; }
 MCP=$(out PrometheusLambdaMCPAPIGatewayStack MCPEndpoint)

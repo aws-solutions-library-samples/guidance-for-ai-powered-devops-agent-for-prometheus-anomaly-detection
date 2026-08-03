@@ -43,15 +43,37 @@ from botocore.auth import SigV4Auth
 from botocore.awsrequest import AWSRequest
 import requests
 
-# Configuration
-REGION = 'us-east-1'
-WORKSPACE_ID = 'ws-185ff7f8-c698-4d0e-9135-945b03aeccd1'
-AMP_QUERY_URL = f'https://aps-workspaces.{REGION}.amazonaws.com/workspaces/{WORKSPACE_ID}/api/v1/query'
-AMP_RANGE_URL = AMP_QUERY_URL + '_range'
-EKS_CLUSTER = 'open5gs-amp-cluster'
+# Configuration - self-discovering (no hardcoded account / region / workspace).
+# Region comes from the notebook's own environment; the AMP workspace is looked up
+# by its alias, so this notebook works unchanged in any account or region.
+REGION = os.environ.get('AWS_REGION') or boto3.Session().region_name or 'us-east-1'
+EKS_CLUSTER = os.environ.get('EKS_CLUSTER', 'open5gs-amp-cluster')
+AMP_WORKSPACE_ALIAS = os.environ.get('AMP_WORKSPACE_ALIAS', 'open5gs-amp')
 
 session = boto3.Session(region_name=REGION)
 credentials = session.get_credentials().get_frozen_credentials()
+
+def discover_workspace_id(alias=AMP_WORKSPACE_ALIAS):
+    """Resolve the AMP workspace ID by alias (portable across accounts/regions).
+    Override with the AMP_WORKSPACE_ID env var if you prefer to pin it."""
+    if os.environ.get('AMP_WORKSPACE_ID'):
+        return os.environ['AMP_WORKSPACE_ID']
+    amp = session.client('amp')
+    token = None
+    while True:
+        resp = amp.list_workspaces(**({'nextToken': token} if token else {}))
+        for ws in resp.get('workspaces', []):
+            if ws.get('alias') == alias:
+                return ws['workspaceId']
+        token = resp.get('nextToken')
+        if not token:
+            break
+    raise RuntimeError(f"No AMP workspace with alias '{alias}' in {REGION}. "
+                       "Set AMP_WORKSPACE_ID to pin one.")
+
+WORKSPACE_ID = discover_workspace_id()
+AMP_QUERY_URL = f'https://aps-workspaces.{REGION}.amazonaws.com/workspaces/{WORKSPACE_ID}/api/v1/query'
+AMP_RANGE_URL = AMP_QUERY_URL + '_range'
 
 def query_amp(promql):
     """Instant PromQL query against AMP (SigV4)."""

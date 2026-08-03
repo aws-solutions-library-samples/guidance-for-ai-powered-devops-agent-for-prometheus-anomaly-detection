@@ -12,7 +12,7 @@
 # Usage:  ./deploy/70-wire-agent-webhook.sh
 set -euo pipefail
 
-: "${AWS_PROFILE:=proactive-rca-demo}"
+: "${AWS_PROFILE:=default}"
 export AWS_PROFILE
 REGION="${AWS_REGION:-us-east-1}"
 STACK="${STACK:-Open5gsAmpStack}"

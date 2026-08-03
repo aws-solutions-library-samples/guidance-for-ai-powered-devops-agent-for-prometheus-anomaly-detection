@@ -93,7 +93,7 @@ export class AmpStack extends cdk.Stack {
   - name: rcf-anomaly-alerts
     rules:
       - alert: RCF5GRegistrationDrop
-        expr: anomaly_detector:score{alias="5g-registered-subscribers"} > 0.1
+        expr: max_over_time(anomaly_detector:score{alias="5g-registered-subscribers"}[2m]) > 0.1
         for: 0s
         labels:
           severity: critical

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Verify: (1) metrics in AMP via SigV4, (2) agent path via MCP (OAuth2 -> /mcp -> AMP).
 set -euo pipefail
-: "${AWS_PROFILE:=proactive-rca-demo}"; export AWS_PROFILE
+: "${AWS_PROFILE:=default}"; export AWS_PROFILE
 : "${AWS_REGION:=us-east-1}"
 WS=$(aws cloudformation describe-stacks --region "$AWS_REGION" --stack-name Open5gsAmpStack --query "Stacks[0].Outputs[?OutputKey=='WorkspaceId'].OutputValue" --output text)
 echo "AMP workspace: $WS  — query count(up):"

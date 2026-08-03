@@ -40,7 +40,6 @@ apiGatewayStack.addDependency(lambdaStack);
 const notebookStack = new NotebookStack(app, 'Open5gsNotebookStack', {
   env,
   description: 'SageMaker Notebook for RCF anomaly detection demo',
-  workspaceId: amp.workspaceId,
 });
 notebookStack.addDependency(amp);
 

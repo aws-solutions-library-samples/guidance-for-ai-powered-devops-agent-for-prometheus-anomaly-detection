@@ -6,16 +6,14 @@ import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 import { Construct } from 'constructs';
 import * as path from 'path';
 
-interface NotebookStackProps extends cdk.StackProps {
-  workspaceId: string;
-}
-
 /**
  * SageMaker Notebook instance pre-loaded with the RCF anomaly detection demo notebook.
  * Access via AWS Console → SageMaker → Notebook instances → Open Jupyter.
+ * The notebook self-discovers the AMP workspace by alias at runtime, so no workspace
+ * ID is injected here.
  */
 export class NotebookStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props: NotebookStackProps) {
+  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
     // S3 bucket for notebook files
@@ -50,6 +48,8 @@ export class NotebookStack extends cdk.Stack {
                 'aps:ListAnomalyDetectors',
                 'aps:DescribeRuleGroupsNamespace',
                 'aps:ListRuleGroupsNamespaces',
+                'aps:ListWorkspaces',
+                'aps:DescribeWorkspace',
               ],
               resources: ['*'],
             }),
