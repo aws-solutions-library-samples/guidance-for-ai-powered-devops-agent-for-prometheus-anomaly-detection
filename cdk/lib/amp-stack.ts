@@ -4,6 +4,7 @@ import * as sns from 'aws-cdk-lib/aws-sns';
 import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as path from 'path';
 import { Construct } from 'constructs';
 
@@ -16,8 +17,10 @@ import { Construct } from 'constructs';
  * - RCF Anomaly Detector on sum(fivegs_amffunction_rm_registeredsubnbr)
  * - Alert rule: fires when RCF score > 0.1 (onset detection, for: 0s)
  * - Automated RCA pipeline (2b): SNS topic -> Lambda bridge that runs the RCA correlation
- *   (identifies which AMF dropped via AMP) and optionally forwards an incident to the
- *   AWS DevOps Agent webhook (set the URL via `-c devopsAgentWebhookUrl=https://...`).
+ *   (identifies which AMF dropped via AMP) and forwards an incident to the DevOps Agent
+ *   webhook. The webhook {url,token} lives in a Secrets Manager secret that a human fills
+ *   in AFTER creating the Agent Space (console or deploy/70-wire-agent-webhook.sh) — the
+ *   real value never flows through CDK/CloudFormation.
  */
 export class AmpStack extends cdk.Stack {
   public readonly workspaceId: string;
@@ -34,7 +37,8 @@ export class AmpStack extends cdk.Stack {
     // deterministic ARN without creating a workspace->topic dependency cycle.
     const rcaTopicName = 'open5gs-rcf-rca-trigger';
     const rcaTopicArn = `arn:aws:sns:${this.region}:${this.account}:${rcaTopicName}`;
-    // Optional DevOps Agent webhook: `cdk deploy -c devopsAgentWebhookUrl=https://...`
+    // Optional env-var fallback: `cdk deploy -c devopsAgentWebhookUrl=https://...` (no auth token).
+    // Preferred path is the Secrets Manager secret below (supports a token, no redeploy to rotate).
     const devopsAgentWebhookUrl = (this.node.tryGetContext('devopsAgentWebhookUrl') as string) || '';
 
     // Alertmanager config: route every firing alert (only RCF5GRegistrationDrop exists) to SNS.
@@ -124,6 +128,16 @@ export class AmpStack extends cdk.Stack {
       },
     }));
 
+    // Secrets Manager secret holding the DevOps Agent Space webhook {url, token}.
+    // Created as an empty placeholder; a human fills it in AFTER creating the Agent Space
+    // (Secrets Manager console or deploy/70-wire-agent-webhook.sh). The real value never
+    // flows through CDK/CloudFormation, and rotating it needs no redeploy.
+    const agentSecret = new secretsmanager.Secret(this, 'AgentWebhookSecret', {
+      secretName: 'open5gs/devops-agent/webhook',
+      description: 'DevOps Agent Space webhook url+token; filled in post-deploy via deploy/70-wire-agent-webhook.sh',
+      secretStringValue: cdk.SecretValue.unsafePlainText(JSON.stringify({ url: '', token: '' })),
+    });
+
     // RCA bridge Lambda (dependency-free: bundled botocore SigV4 + urllib).
     const rcaFn = new lambda.Function(this, 'RcaBridge', {
       functionName: 'open5gs-rcf-rca',
@@ -132,9 +146,10 @@ export class AmpStack extends cdk.Stack {
       code: lambda.Code.fromAsset(path.join(__dirname, '../lambda-rca')),
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
-      description: 'Runs RCA on the RCF alert and optionally forwards to the DevOps Agent webhook',
+      description: 'Runs RCA on the RCF alert and forwards to the DevOps Agent webhook (from Secrets Manager)',
       environment: {
         AMP_WORKSPACE_ID: ws.attrWorkspaceId,
+        AGENT_WEBHOOK_SECRET_ARN: agentSecret.secretArn,
         DEVOPS_AGENT_WEBHOOK_URL: devopsAgentWebhookUrl,
       },
     });
@@ -144,6 +159,9 @@ export class AmpStack extends cdk.Stack {
       actions: ['aps:QueryMetrics', 'aps:GetSeries', 'aps:GetLabels', 'aps:GetMetricMetadata'],
       resources: [ws.attrArn],
     }));
+
+    // Let the Lambda read the webhook secret at runtime (adds GetSecretValue + KMS decrypt).
+    agentSecret.grantRead(rcaFn);
 
     // SNS -> Lambda (LambdaSubscription adds the invoke permission automatically).
     rcaTopic.addSubscription(new subscriptions.LambdaSubscription(rcaFn));
@@ -156,8 +174,9 @@ export class AmpStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'RcfDetectorAlias', { value: '5g-registered-subscribers' });
     new cdk.CfnOutput(this, 'RcaTopicArn', { value: rcaTopic.topicArn });
     new cdk.CfnOutput(this, 'RcaLambdaName', { value: rcaFn.functionName });
+    new cdk.CfnOutput(this, 'AgentWebhookSecretName', { value: agentSecret.secretName });
     new cdk.CfnOutput(this, 'DevopsAgentWebhook', {
-      value: devopsAgentWebhookUrl ? 'configured' : 'not set (deploy with -c devopsAgentWebhookUrl=https://...)',
+      value: 'fill via deploy/70-wire-agent-webhook.sh (Secrets Manager: open5gs/devops-agent/webhook)',
     });
   }
 }
