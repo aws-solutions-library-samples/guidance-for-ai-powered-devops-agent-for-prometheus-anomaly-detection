@@ -230,7 +230,13 @@ if ok:
         run_kubectl(['delete', 'pod', '-n', 'open5gs', '-l', 'app=amf1', '--wait=false'], timeout=30)
         print('\u2717 Bad config pushed + AMF1 pods deleted \u2192 CrashLoopBackOff.')
         print('  ~500 UEs (TAC=1) will deregister within ~30s. Waiting 75s for impact + RCF eval...')
-        time.sleep(75)
+        for _ in range(5):
+            time.sleep(15)
+            try:
+                total = sum(int(float(r['value'][1])) for r in query_amp('fivegs_amffunction_rm_registeredsubnbr'))
+                print(f'  registered subscribers: {total}  (expect ~500 once AMF1 is fully down)')
+            except Exception as e:
+                print(f'  (AMP query retry: {str(e)[:80]})')
     else:
         print('\u2717 Could not apply config \u2014 check kubectl connectivity (Setup cell).')
 else:
@@ -362,7 +368,15 @@ if ok:
     # restart TAC=1 gNBs so their ~500 UEs re-register
     run_kubectl(['rollout', 'restart', 'statefulset/gnb1a', 'statefulset/gnb1b', '-n', 'open5gs'], timeout=30)
     print('\u2713 Valid config restored + gNBs restarting. Waiting 150s for UEs to re-register...')
-    time.sleep(150)
+    for _ in range(10):
+        time.sleep(15)
+        try:
+            total = sum(int(float(r['value'][1])) for r in query_amp('fivegs_amffunction_rm_registeredsubnbr'))
+            print(f'  registered subscribers: {total}  (climbing back to 1000...)')
+            if total >= 1000:
+                print('  fully recovered'); break
+        except Exception as e:
+            print(f'  (AMP query retry: {str(e)[:80]})')
     total = int(query_amp('sum(fivegs_amffunction_rm_registeredsubnbr)')[0]['value'][1])
     print(f'\\n\u2550\u2550\u2550 POST-RECOVERY \u2550\u2550\u2550')
     print(f'  Registered subscribers: {total} / 1000')
