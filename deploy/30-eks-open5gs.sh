@@ -36,8 +36,18 @@ helm repo update
 helm upgrade --install open5gs towards5gs/open5gs -n open5gs --create-namespace --wait --timeout 8m || \
   echo "NOTE: open5gs install via towards5gs needs Multus for some NFs; core NFs should still emit metrics."
 
-echo "4) Deploy metrics pipeline -> AMP"
+echo "4) Deploy metrics pipeline -> AMP (remote_write URL resolved from the workspace by alias)"
+WS=$(aws amp list-workspaces --alias open5gs-amp --region "$AWS_REGION" --query 'workspaces[0].workspaceId' --output text)
+if [ -z "$WS" ] || [ "$WS" = "None" ]; then
+  echo "ERROR: no AMP workspace with alias 'open5gs-amp' in $AWS_REGION. Deploy the CDK AMP stack first."; exit 1
+fi
+RW_URL="https://aps-workspaces.${AWS_REGION}.amazonaws.com/workspaces/${WS}/api/v1/remote_write"
+echo "   remote_write -> $RW_URL"
 helm dependency update "$HERE/../helm/open5gs-amp"
-helm upgrade --install open5gs-amp "$HERE/../helm/open5gs-amp" -n monitoring
+helm upgrade --install open5gs-amp "$HERE/../helm/open5gs-amp" -n monitoring \
+  --set-string "kube-prometheus-stack.prometheus.prometheusSpec.remoteWrite[0].url=${RW_URL}" \
+  --set-string "kube-prometheus-stack.prometheus.prometheusSpec.remoteWrite[0].sigv4.region=${AWS_REGION}" \
+  --set-string "amp.remoteWriteUrl=${RW_URL}" \
+  --set-string "amp.region=${AWS_REGION}"
 
 echo "Done. Verify metrics land in AMP with deploy/40-verify-amp.sh"

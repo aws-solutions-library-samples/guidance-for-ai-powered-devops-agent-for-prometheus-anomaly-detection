@@ -1,6 +1,6 @@
 # ── open5gs-amp: ship cluster + open5gs metrics to Amazon Managed Prometheus ──
 amp:
-  remoteWriteUrl: "https://aps-workspaces.us-east-1.amazonaws.com/workspaces/ws-185ff7f8-c698-4d0e-9135-945b03aeccd1/api/v1/remote_write"
+  remoteWriteUrl: ""   # resolved from the AMP workspace by alias and injected by deploy/30 via --set
   region: us-east-1
   # IAM role (IRSA) with aps:RemoteWrite, bound to the Prometheus service account.
   # Created by deploy/30-eks-open5gs.sh via: eksctl create iamserviceaccount.
@@ -27,7 +27,7 @@ kube-prometheus-stack:
       podMonitorNamespaceSelector: {}
       # ship everything to AMP with SigV4
       remoteWrite:
-        - url: "https://aps-workspaces.us-east-1.amazonaws.com/workspaces/ws-185ff7f8-c698-4d0e-9135-945b03aeccd1/api/v1/remote_write"
+        - url: "https://aps-workspaces.REGION.amazonaws.com/workspaces/AMP_WORKSPACE_ID/api/v1/remote_write"  # placeholder; deploy/30 injects the real URL (resolved by workspace alias) via --set
           sigv4:
             region: us-east-1
       additionalScrapeConfigs:

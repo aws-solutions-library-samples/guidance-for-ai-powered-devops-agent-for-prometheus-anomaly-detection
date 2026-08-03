@@ -1,6 +1,6 @@
 digraph amp {
   rankdir=LR; bgcolor="white"; pad=0.3; nodesep=0.4; ranksep=0.9;
-  graph [fontname="Helvetica", label=<<B>AI-Powered DevOps Agent for Prometheus — open5gs + Amazon Managed Prometheus</B><BR/><FONT POINT-SIZE="11" COLOR="#5b6b7a">acct 985090322243 · us-east-1 · register-only (no Agent Space created)</FONT>>, labelloc=t];
+  graph [fontname="Helvetica", label=<<B>AI-Powered DevOps Agent for Prometheus — open5gs + Amazon Managed Prometheus</B><BR/><FONT POINT-SIZE="11" COLOR="#5b6b7a">register-only capability provider · no Agent Space created</FONT>>, labelloc=t];
   node [fontname="Helvetica", fontsize=11, shape=box, style="rounded,filled", penwidth=1.3, margin="0.14,0.09"];
   edge [fontname="Helvetica", fontsize=9, color="#5b6b7a"];
 
