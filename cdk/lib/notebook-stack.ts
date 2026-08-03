@@ -3,6 +3,7 @@ import * as sagemaker from 'aws-cdk-lib/aws-sagemaker';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
 import * as path from 'path';
 
@@ -111,15 +112,49 @@ chown -R ec2-user:ec2-user /home/ec2-user/SageMaker/
       onStart: [{ content: onStartScript }],
     });
 
-    // SageMaker Notebook Instance
+    // Two-step recreate helper: `-c skipNotebook=true` omits the notebook instance so a
+    // networking change (which forces replacement of this custom-named resource) can be
+    // applied as delete-then-create across two deploys, preserving the fixed name.
+    const skipNotebook = this.node.tryGetContext('skipNotebook') === 'true';
+
+    // Optional VPC attach so the notebook uses the EKS PRIVATE endpoint (removes the
+    // publicAccessCidrs dependency and works in any account/region). Values are resolved
+    // from the cluster by deploy/60 and passed via context; when absent the notebook stays
+    // public (kubectl cells then depend on the public endpoint allowlist).
+    if (!skipNotebook) {
+    const eksVpcId = (this.node.tryGetContext('eksVpcId') as string) || '';
+    const eksSubnetId = (this.node.tryGetContext('eksSubnetId') as string) || '';
+    const eksClusterSg = (this.node.tryGetContext('eksClusterSg') as string) || '';
+    const vpcAttach = !!(eksVpcId && eksSubnetId && eksClusterSg);
+    let vpcProps: Partial<sagemaker.CfnNotebookInstanceProps> = {};
+    if (vpcAttach) {
+      const nbSg = new ec2.CfnSecurityGroup(this, 'NotebookSg', {
+        vpcId: eksVpcId,
+        groupDescription: 'SageMaker RCF notebook to EKS private API endpoint plus NAT egress',
+        securityGroupEgress: [{ ipProtocol: '-1', cidrIp: '0.0.0.0/0' }],
+      });
+      // Allow the notebook SG to reach the EKS API (443) on the cluster security group.
+      new ec2.CfnSecurityGroupIngress(this, 'ClusterApiFromNotebook', {
+        groupId: eksClusterSg, ipProtocol: 'tcp', fromPort: 443, toPort: 443,
+        sourceSecurityGroupId: nbSg.ref, description: 'SageMaker RCF notebook to EKS API',
+      });
+      // Private subnet (with NAT) => private EKS endpoint access + internet for pip/kubectl.
+      vpcProps = { subnetId: eksSubnetId, securityGroupIds: [nbSg.ref], directInternetAccess: 'Disabled' };
+    }
+
+    // SageMaker Notebook Instance (VPC-attached when context is provided)
     const notebook = new sagemaker.CfnNotebookInstance(this, 'DemoNotebook', {
       instanceType: 'ml.t3.medium',
       roleArn: role.roleArn,
       notebookInstanceName: 'open5gs-rcf-anomaly-demo',
       lifecycleConfigName: lifecycleConfig.attrNotebookInstanceLifecycleConfigName,
       volumeSizeInGb: 10,
+      ...vpcProps,
     });
     notebook.addDependency(lifecycleConfig);
+    new cdk.CfnOutput(this, 'NotebookVpcAttached', {
+      value: vpcAttach ? `yes (private endpoint via ${eksSubnetId})` : 'no (public endpoint)',
+    });
 
     // Outputs
     new cdk.CfnOutput(this, 'NotebookUrl', {
@@ -127,5 +162,6 @@ chown -R ec2-user:ec2-user /home/ec2-user/SageMaker/
       description: 'Open SageMaker Notebook in AWS Console (click "Open Jupyter")',
     });
     new cdk.CfnOutput(this, 'NotebookName', { value: 'open5gs-rcf-anomaly-demo' });
+    }
   }
 }

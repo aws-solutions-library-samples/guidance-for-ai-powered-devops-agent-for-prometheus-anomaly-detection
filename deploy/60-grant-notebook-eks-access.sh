@@ -26,4 +26,31 @@ aws eks associate-access-policy --region "$REGION" \
   --policy-arn arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy \
   --access-scope type=cluster 2>/dev/null || echo "  (policy already associated)"
 
-echo "✓ Notebook role granted EKS access. kubectl from the notebook will now work."
+echo "✓ Notebook role granted EKS access (authorization)."
+
+# --- VPC-attach the notebook to the EKS PRIVATE endpoint (reachability) ---
+# Generic: everything resolved from the cluster by name, nothing hardcoded. This removes
+# the dependency on the EKS publicAccessCidrs allowlist (a SageMaker egress IP is dynamic).
+echo "Resolving cluster networking for private-endpoint access..."
+VPC=$(aws eks describe-cluster --region "$REGION" --name "$CLUSTER" --query cluster.resourcesVpcConfig.vpcId --output text)
+CSG=$(aws eks describe-cluster --region "$REGION" --name "$CLUSTER" --query cluster.resourcesVpcConfig.clusterSecurityGroupId --output text)
+# eksctl tags private subnets with internal-elb=1; pick one that has a NAT route (internet for pip/kubectl)
+SUBNET=""
+for sn in $(aws ec2 describe-subnets --region "$REGION" \
+      --filters "Name=vpc-id,Values=$VPC" "Name=tag:kubernetes.io/role/internal-elb,Values=1" \
+      --query 'Subnets[].SubnetId' --output text); do
+  NAT=$(aws ec2 describe-route-tables --region "$REGION" --filters "Name=association.subnet-id,Values=$sn" \
+        --query 'RouteTables[0].Routes[?DestinationCidrBlock==`0.0.0.0/0`].NatGatewayId' --output text)
+  if [ -n "$NAT" ] && [ "$NAT" != "None" ]; then SUBNET="$sn"; break; fi
+done
+if [ -z "$SUBNET" ]; then
+  echo "  ! No private subnet with NAT found in $VPC; leaving notebook public."; exit 0
+fi
+echo "  VPC=$VPC  subnet=$SUBNET  clusterSG=$CSG"
+
+echo "Deploying notebook VPC-attached (private endpoint)..."
+export CDK_DEFAULT_REGION="$REGION"
+export CDK_DEFAULT_ACCOUNT="$(aws sts get-caller-identity --query Account --output text)"
+( cd "$(dirname "$0")/../cdk" && npx cdk deploy Open5gsNotebookStack --require-approval never \
+    -c eksVpcId="$VPC" -c eksSubnetId="$SUBNET" -c eksClusterSg="$CSG" )
+echo "✓ Notebook VPC-attached to the EKS private endpoint — kubectl works with no publicAccessCidrs dependency."
