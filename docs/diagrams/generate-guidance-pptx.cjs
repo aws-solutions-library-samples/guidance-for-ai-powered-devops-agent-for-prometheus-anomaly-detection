@@ -1,17 +1,19 @@
 /*
  * AWS Guidance-format reference architecture (single slide, 13.33x7.5) for the
- * 5G RCF anomaly-detection + automated RCA solution. Follows the official
- * guidance-architecture-diagram-template conventions (title+description over a
- * separator, grey right panel with numbered callouts, AWS Cloud>Region grouping,
- * straight/right-angle 1.25pt open arrows, Arial, footer).
- *
- * Colored boxes are placeholders for official AWS Architecture Icons — swap them
- * in PowerPoint for final publish (Approach B in the aws-guidance-pptx skill).
+ * 5G RCF anomaly-detection + automated RCA solution. Uses the OFFICIAL AWS
+ * Architecture Icons (docs/diagrams/icons/*.png, rasterized from the aws-icons
+ * set) for AWS services, and labeled boxes for non-AWS/third-party elements
+ * (open5gs, UERANSIM, Prometheus agent). Follows the guidance-architecture-diagram
+ * template: title+description over a separator, grey right panel with numbered
+ * callouts (bold AWS names, acronyms spelled out), AWS Cloud>Region grouping,
+ * straight/right-angle 1.25pt open arrows, Arial, footer.
  *
  * Run: node docs/diagrams/generate-guidance-pptx.cjs <out.pptx>
  */
+const path = require('path');
 const pptxgen = require('/opt/homebrew/lib/node_modules/pptxgenjs');
 const out = process.argv[2] || '5g-rcf-architecture-guidance.pptx';
+const IC = (n) => path.join(__dirname, 'icons', n + '.png');
 const pptx = new pptxgen();
 pptx.layout = 'LAYOUT_WIDE';
 const S = pptx.ShapeType;
@@ -19,10 +21,9 @@ const slide = pptx.addSlide();
 
 const DARK='232F3E', ORANGE='FF9900', BLUE='0972D3', GREEN='1B8B1B', PURPLE='7C3AED',
       RED='D13212', GRAY='666666', WHITE='FFFFFF',
-      GREENBG='DCEEDC', ORANGEBG='FFE9CC', PURPLEBG='ECE3FB', REDBG='FBE2DC', BLUEBG='DCEBFA', GREYBG='F5F5F5';
+      GREENBG='DCEEDC', ORANGEBG='FFE9CC', GREYBG='F5F5F5';
 const F='Arial';
 
-// Title + description + separator
 slide.addText('Guidance for 5G Network Anomaly Detection and Automated Root Cause Analysis on AWS',
   { x:0.3, y:0.12, w:8.4, h:0.35, fontSize:14, bold:true, fontFace:F, color:DARK });
 slide.addText('Amazon Managed Service for Prometheus applies Random Cut Forest anomaly detection to a live 5G core, then runs an automated root-cause-analysis pipeline that identifies the failing network function and hands the incident to the AWS DevOps Agent.',
@@ -57,76 +58,79 @@ slide.addText('AWS Cloud', { x:0.4, y:0.87, w:1.2, h:0.2, fontSize:8, bold:true,
 slide.addShape(S.rect, { x:0.5, y:1.15, w:8.1, h:5.8, fill:{type:'solid',color:WHITE,transparency:100}, line:{color:BLUE, width:1, dashType:'dash'} });
 slide.addText('Region (us-east-1)', { x:0.6, y:1.17, w:1.8, h:0.2, fontSize:8, bold:true, fontFace:F, color:BLUE });
 
-function box(x,y,w,h,label,bg,border,fs){
-  slide.addText(label, { x, y, w, h, fontSize:fs||9, bold:true, fontFace:F, color:DARK, align:'center',
+function labelBox(x,y,w,h,label,bg,border,fs){
+  slide.addText(label, { x, y, w, h, fontSize:fs||8, bold:true, fontFace:F, color:DARK, align:'center',
     valign:'middle', fill:{color:bg}, line:{color:border, width:1} });
+}
+function svc(x,y,w,icon,label,fs){ // official AWS icon (centered) + label below
+  const iw=0.5;
+  slide.addImage({ path:IC(icon), x:x+(w-iw)/2, y, w:iw, h:iw });
+  slide.addText(label, { x, y:y+iw+0.01, w, h:0.4, fontSize:fs||8, fontFace:F, color:DARK, align:'center', valign:'top' });
 }
 function callout(x,y,n){
   slide.addText(String(n), { x, y, w:0.24, h:0.24, fontSize:8.5, bold:true, fontFace:F, color:WHITE,
     fill:{color:ORANGE}, align:'center', valign:'middle', shape:S.ellipse });
 }
-function seg(x,y,w,h,color,head){ // straight segment; head: 'end'|'begin'|null
+function seg(x,y,w,h,color,head){
   slide.addShape(S.line, { x, y, w, h, line:{ color:color||GRAY, width:1.25,
     ...(head==='end'?{endArrowType:'triangle'}:{}), ...(head==='begin'?{beginArrowType:'triangle'}:{}) } });
 }
 
-// Amazon EKS group
-slide.addShape(S.rect, { x:0.7, y:1.5, w:3.05, h:2.95, fill:{type:'solid',color:BLUEBG,transparency:65}, line:{color:ORANGE, width:1} });
-slide.addText('Amazon EKS  ·  open5gs-amp-cluster', { x:0.78, y:1.53, w:2.9, h:0.2, fontSize:8, bold:true, fontFace:F, color:DARK });
-box(0.85,1.8,2.75,0.55,'UERANSIM RAN\n100 gNodeBs · 1,000 UEs', ORANGEBG, ORANGE, 8.5);
-box(0.85,2.45,2.75,0.85,'open5gs 5G Core\nAMF · SMF · 4x UPF · NRF/UDM/PCF', ORANGEBG, ORANGE, 8);
-box(0.85,3.4,2.75,0.85,'Prometheus agent (ADOT)\nscrape + remote_write (SigV4)', GREENBG, GREEN, 8);
+// Amazon EKS group (icon at top-left) + non-AWS inner boxes
+slide.addShape(S.rect, { x:0.7, y:1.5, w:3.05, h:2.95, fill:{type:'solid',color:'EAF3FB',transparency:35}, line:{color:ORANGE, width:1} });
+slide.addImage({ path:IC('AmazonElasticKubernetesService'), x:0.78, y:1.55, w:0.32, h:0.32 });
+slide.addText('Amazon EKS · open5gs-amp-cluster', { x:1.14, y:1.57, w:2.5, h:0.3, fontSize:8, bold:true, fontFace:F, color:DARK, valign:'middle' });
+labelBox(0.85,2.0,2.75,0.5,'UERANSIM RAN — 100 gNodeBs · 1,000 UEs', WHITE, GRAY, 8);
+labelBox(0.85,2.6,2.75,0.75,'open5gs 5G Core\nAMF · SMF · 4x UPF · NRF/UDM/PCF', WHITE, GRAY, 8);
+labelBox(0.85,3.5,2.75,0.7,'Prometheus agent (ADOT)\nscrape + remote_write (SigV4)', GREENBG, GREEN, 8);
 callout(0.56,1.7,1);
 
-// Amazon Managed Service for Prometheus
-box(4.15,1.6,2.35,0.9,'Amazon Managed\nService for Prometheus', GREENBG, GREEN, 9);
-box(4.15,2.6,2.35,0.62,'RCF anomaly detector\nscore > 0.1 · 30s', GREENBG, GREEN, 8);
-callout(3.9,1.66,2); callout(4.2,2.66,3);
+// Amazon Managed Service for Prometheus (+ RCF sub-note)
+svc(4.05,1.5,2.5,'AmazonManagedServiceforPrometheus','Amazon Managed Service\nfor Prometheus',8);
+labelBox(4.35,2.55,1.9,0.5,'RCF anomaly detector — score > 0.1 · 30s', GREENBG, GREEN, 7.5);
+callout(4.05,1.56,2); callout(6.0,1.56,3);
 
 // Amazon SNS
-box(6.85,1.6,1.75,0.9,'Amazon SNS\nRCA trigger topic', PURPLEBG, PURPLE, 8.5);
-callout(6.66,1.66,4);
+svc(6.75,1.5,1.9,'AmazonSimpleNotificationService','Amazon SNS\nRCA trigger topic',8);
+callout(6.6,1.56,4);
 
 // RCA AWS Lambda
-box(6.85,3.0,1.75,0.9,'AWS Lambda\nRoot-cause analysis', ORANGEBG, ORANGE, 8.5);
-callout(6.66,3.06,5); callout(6.5,2.9,6);
+svc(6.75,3.0,1.9,'AWSLambda','AWS Lambda\nRoot-cause analysis',8);
+callout(6.6,3.06,5); callout(6.3,2.95,6);
 
 // AWS Secrets Manager
-box(4.15,3.55,1.95,0.8,'AWS Secrets Manager\nagent webhook url + token', REDBG, RED, 8);
-callout(5.9,3.5,7);
+svc(4.15,3.55,1.9,'AWSSecretsManager','AWS Secrets Manager\nagent webhook url+token',8);
+callout(5.75,3.5,7);
 
 // AWS DevOps Agent
-box(6.85,4.45,1.75,0.9,'AWS DevOps Agent\nautonomous investigation', PURPLEBG, PURPLE, 8.5);
-callout(6.66,4.51,8);
+svc(6.75,4.45,1.9,'AWSDevOpsAgent','AWS DevOps Agent\nautonomous investigation',8);
+callout(6.6,4.51,8);
 
 // Amazon SageMaker (bottom-left)
-box(0.7,5.1,2.6,0.9,'Amazon SageMaker\nDemo notebook', BLUEBG, BLUE, 8.5);
-callout(0.56,5.16,9);
+svc(0.85,5.15,2.3,'AmazonSageMaker','Amazon SageMaker — Demo notebook',8);
+callout(0.66,5.18,9);
 
-// Prometheus MCP (bottom-right)
-slide.addShape(S.rect, { x:5.4, y:5.55, w:3.2, h:1.3, fill:{type:'solid',color:PURPLEBG,transparency:60}, line:{color:PURPLE, width:1} });
-slide.addText('Prometheus MCP server (on-demand query)', { x:5.48, y:5.58, w:3.05, h:0.2, fontSize:8, bold:true, fontFace:F, color:DARK });
-box(5.5,5.85,0.95,0.85,'Amazon\nCognito', PURPLEBG, PURPLE, 8);
-box(6.55,5.85,1.0,0.85,'Amazon API\nGateway', PURPLEBG, PURPLE, 8);
-box(7.65,5.85,0.85,0.85,'AWS\nLambda', ORANGEBG, ORANGE, 8);
+// Prometheus MCP group (bottom-right)
+slide.addShape(S.rect, { x:5.35, y:5.5, w:3.25, h:1.4, fill:{type:'solid',color:'F3EEFC',transparency:35}, line:{color:PURPLE, width:1} });
+slide.addText('Prometheus MCP server (on-demand query)', { x:5.43, y:5.53, w:3.1, h:0.2, fontSize:8, bold:true, fontFace:F, color:DARK });
+svc(5.4,5.78,1.0,'AmazonCognito','Amazon Cognito',7.5);
+svc(6.5,5.78,1.05,'AmazonAPIGateway','Amazon API Gateway',7.5);
+svc(7.6,5.78,0.95,'AWSLambda','AWS Lambda',7.5);
 
-// Arrows (straight + right angles; 1.25pt open arrows)
-seg(3.75,2.05,0.4,0,GREEN,'end');       // (2) EKS -> AMP remote_write
-seg(6.5,2.05,0.35,0,GREEN,'end');       // (4) AMP -> SNS alert
-seg(7.72,2.5,0,0.5,PURPLE,'end');       // (5) SNS -> RCA Lambda
-seg(6.5,3.15,0.35,0,BLUE,'begin');      // (6) Lambda -> AMP query (points left into AMP)
-seg(6.1,3.75,0.75,0,RED,'end');         // (7) Secrets Manager -> Lambda
-seg(7.72,3.9,0,0.55,PURPLE,'end');      // (8) Lambda -> DevOps Agent
-seg(7.72,5.35,0,0.2,PURPLE,'end');      // DevOps Agent -> MCP
-seg(6.3,3.22,0,2.33,BLUE,'begin');      // MCP -> AMP query (points up into RCF bottom)
-// (9) SageMaker -> AMP query: right to corridor x3.9, up, right into AMP left
-seg(3.3,5.5,0.6,0,BLUE,null);
-seg(3.9,2.05,0,3.45,BLUE,null);
-seg(3.9,2.05,0.25,0,BLUE,'end');
+// Arrows
+seg(3.75,1.9,0.3,0,GREEN,'end');        // (2) EKS -> AMP
+seg(6.55,1.9,0.2,0,GREEN,'end');        // (4) AMP -> SNS
+seg(7.7,2.35,0,0.65,PURPLE,'end');      // (5) SNS -> Lambda
+seg(6.4,3.2,0.35,0,BLUE,'begin');       // (6) Lambda -> AMP query
+seg(6.05,3.75,0.7,0,RED,'end');         // (7) Secrets Manager -> Lambda
+seg(7.7,3.9,0,0.55,PURPLE,'end');       // (8) Lambda -> DevOps Agent
+seg(7.7,5.35,0,0.15,PURPLE,'end');      // DevOps Agent -> MCP
+seg(6.25,3.2,0,2.3,BLUE,'begin');       // MCP -> AMP query
+seg(3.35,5.5,0.55,0,BLUE,null);         // (9) SageMaker -> corridor
+seg(3.9,1.95,0,3.55,BLUE,null);         // corridor up
+seg(3.9,1.95,0.15,0,BLUE,'end');        // into AMP
 
 // Footer
-slide.addText('Placeholder boxes represent AWS service icons — replace with official AWS Architecture Icons before publishing.',
-  { x:0.3, y:7.0, w:8.4, h:0.16, fontSize:6, italic:true, fontFace:F, color:'AAAAAA' });
 slide.addText('© 2026, Amazon Web Services, Inc. or its affiliates. All rights reserved.',
   { x:0.3, y:7.2, w:8.4, h:0.2, fontSize:6.5, fontFace:F, color:GRAY });
 
