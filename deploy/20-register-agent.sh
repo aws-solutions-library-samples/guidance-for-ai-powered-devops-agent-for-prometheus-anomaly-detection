@@ -18,5 +18,27 @@ cat > /tmp/amp-mcp-svc.json <<JSON
     "exchangeUrl": "https://$DOMAIN.auth.$AWS_REGION.amazoncognito.com/oauth2/token",
     "scopes": ["prometheus-mcp-server/read"] } } } }
 JSON
-aws devops-agent register-service --region "$AWS_REGION" --service mcpserver --service-details file:///tmp/amp-mcp-svc.json
-echo "Registered Prometheus MCP capability provider (register-only)."
+echo "Registering the Prometheus MCP as a DevOps Agent capability provider..."
+echo "NOTE: requires the AWS DevOps Agent to be enabled in this account/region AND the account to be"
+echo "      allow-listed for the devops-agent RegisterService API (currently a gated preview)."
+if err="$(aws devops-agent register-service --region "$AWS_REGION" --service mcpserver \
+          --service-details file:///tmp/amp-mcp-svc.json 2>&1)"; then
+  echo "✓ Registered Prometheus MCP capability provider (register-only)."
+elif printf '%s' "$err" | grep -q "AccessDeniedException"; then
+  cat <<'MSG'
+⚠  SKIPPING MCP registration — this account is not authorized for the AWS DevOps Agent
+   RegisterService API yet (gated preview: "Only external and exempted accounts are allowed").
+
+   This step is OPTIONAL. It only lets the DevOps Agent QUERY Amazon Managed Prometheus during
+   an investigation. The demo still works without it: the RCF alert triggers the agent via the
+   WEBHOOK (deploy/70-wire-agent-webhook.sh), and the RCA Lambda logs the root cause to
+   CloudWatch regardless.
+
+   To enable later: turn on the AWS DevOps Agent in the console, request allow-listing for the
+   RegisterService API, then re-run this script. Continuing setup.
+MSG
+else
+  echo "✗ register-service failed for a reason other than authorization:" >&2
+  printf '%s\n' "$err" >&2
+  exit 1
+fi

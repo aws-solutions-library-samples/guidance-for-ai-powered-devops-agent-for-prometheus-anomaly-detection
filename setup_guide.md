@@ -1,6 +1,6 @@
 # setup_guide.md — Deploy from scratch
 
-Single source of truth for deploying this stack. See `docs/CONTEXT.md` for live IDs + handoff state.
+Step-by-step deploy from scratch. All resource IDs are discovered at runtime (nothing hardcoded), so this works in any account/region.
 
 ## Prerequisites
 - AWS profile `YOUR_AWS_PROFILE` (account `YOUR_ACCOUNT_ID`), region `us-east-1`
@@ -16,11 +16,16 @@ cd cdk && ../deploy/10-deploy-cdk.sh
 Creates: AMP workspace, Cognito (m2m client + domain + scope `prometheus-mcp-server/read`),
 Lambda MCP, API Gateway (`/prod/mcp`). Reinstalls gitignored Python deps from `requirements.txt`.
 
-### 2. Register MCP with the DevOps Agent (register-only)
+### 2. (Optional) Register the MCP with the DevOps Agent (register-only)
 ```bash
 ./deploy/20-register-agent.sh
 ```
-Registers the MCP as a capability provider (OAuth2). **Never creates Agent Spaces.**
+Registers the MCP as a capability provider (OAuth2) so the agent can *query* AMP. **Never creates Agent Spaces.**
+
+> **Prerequisite / preview gate:** first **enable the AWS DevOps Agent** and create an Agent Space in the
+> console. The `register-service` API is a **gated preview** — if the account isn't allow-listed you'll get
+> `AccessDeniedException … Only external and exempted accounts are allowed`. This step is **optional**: the
+> script skips gracefully, and the agent is still *triggered* by the webhook (`deploy/70-wire-agent-webhook.sh`).
 
 ### 3. EKS cluster + Prometheus agent → AMP
 ```bash
@@ -56,11 +61,16 @@ kubectl logs -n open5gs -l app=ueransim -c ue --tail=5 | grep -E "Registration i
 # expect: fivegs_amffunction_rm_registeredsubnbr=1, fivegs_smffunction_sm_sessionnbr=1
 
 # metrics via DevOps Agent MCP (OAuth2)
-DOMAIN=mcp-useast1-90322243-1781865760686-xong09ga-1n9c
-MCP=https://qjvbzggmf4.execute-api.us-east-1.amazonaws.com/prod/mcp
-CID=1cgbivpvrehjss1bosftc8apa3
+# Resolve all IDs from stack outputs (nothing hardcoded — portable across accounts)
+MCP=$(aws cloudformation describe-stacks --region us-east-1 --stack-name PrometheusLambdaMCPAPIGatewayStack \
+  --query "Stacks[0].Outputs[?OutputKey=='MCPEndpoint'].OutputValue" --output text)
+POOL=$(aws cloudformation describe-stacks --region us-east-1 --stack-name PrometheusLambdaMCPCognitoStack \
+  --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text)
+CID=$(aws cloudformation describe-stacks --region us-east-1 --stack-name PrometheusLambdaMCPCognitoStack \
+  --query "Stacks[0].Outputs[?OutputKey=='M2MClientId'].OutputValue" --output text)
+DOMAIN=$(aws cognito-idp describe-user-pool --user-pool-id "$POOL" --region us-east-1 --query "UserPool.Domain" --output text)
 SECRET=$(aws cognito-idp describe-user-pool-client --region us-east-1 \
-  --user-pool-id us-east-1_h6wlcZKPP --client-id $CID --query UserPoolClient.ClientSecret --output text)
+  --user-pool-id "$POOL" --client-id "$CID" --query UserPoolClient.ClientSecret --output text)
 TOKEN=$(curl -s -X POST "https://$DOMAIN.auth.us-east-1.amazoncognito.com/oauth2/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=client_credentials&client_id=$CID&client_secret=$SECRET&scope=prometheus-mcp-server/read" \
@@ -72,7 +82,7 @@ curl -s -X POST "$MCP" -H "Authorization: Bearer $TOKEN" -H "Content-Type: appli
 ## Troubleshooting (most-hit issues)
 | Symptom | Cause | Fix |
 |---|---|---|
-| `kubectl` "No resources" / nodes=0 | nodegroup idle-scaled to 0 | scale ng-1 to desired=2 (see CONTEXT §7) |
+| `kubectl` "No resources" / nodes=0 | nodegroup idle-scaled to 0 | `aws eks update-nodegroup-config --cluster-name open5gs-amp-cluster --nodegroup-name ng-1 --scaling-config minSize=2,maxSize=3,desiredSize=2` |
 | `kubectl` times out / i/o timeout | egress IP rotated outside allowlist | update `publicAccessCidrs` to current /8 |
 | open5gs target "down: non-compliant… blank Content-Type" | Prom 3.x strictness | ensure `open5gs-nf` raw scrape job w/ `fallback_scrape_protocol` is present |
 | PDU `OUT_OF_LADN` / SMF "PFCP No Response" | `upf` Service is TCP | UPF Service must be **UDP** (8805 + 2152) |

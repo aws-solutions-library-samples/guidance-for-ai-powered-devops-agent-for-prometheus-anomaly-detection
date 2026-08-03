@@ -1,6 +1,9 @@
 # CONTEXT — AI-Powered DevOps Agent for Prometheus Anomaly Detection
 
-> **Session handoff doc.** Read this first to resume. Last updated: 2026-06-23.
+> **Internal engineering reference / session-handoff notes — NOT required for deployment.**
+> The published deployment steps live in [`../README.md`](../README.md) and [`../setup_guide.md`](../setup_guide.md).
+> Resource IDs below are placeholders (`<...>`); real values are discovered at runtime from stack outputs.
+> Last updated: 2026-06-23.
 > Repo: `git@ssh.gitlab.aws.dev:mdsherif/ai-powered-devops-agent-for-prometheus-anomaly-detection.git` (branch `main`).
 > Local: `06Tools/24-ai-devops-amp` (keep the path SHORT — long WorkDocs paths break CDK/npm).
 
@@ -34,12 +37,12 @@ open5gs NFs (AMF/SMF/UPF) --/metrics:9090--> kube-prometheus-stack (Prometheus a
 | **AMP workspace** | `YOUR_AMP_WORKSPACE_ID` |
 | AMP query URL | `https://aps-workspaces.us-east-1.amazonaws.com/workspaces/YOUR_AMP_WORKSPACE_ID` |
 | AMP remote_write | `…/api/v1/remote_write` |
-| **MCP endpoint** | `https://qjvbzggmf4.execute-api.us-east-1.amazonaws.com/prod/mcp` |
-| Cognito user pool | `us-east-1_h6wlcZKPP` |
-| Cognito m2m client | `1cgbivpvrehjss1bosftc8apa3` (scope `prometheus-mcp-server/read`) |
-| Cognito domain | `mcp-useast1-90322243-1781865760686-xong09ga-1n9c` |
+| **MCP endpoint** | `https://<mcp-api-id>.execute-api.us-east-1.amazonaws.com/prod/mcp` |
+| Cognito user pool | `<cognito-user-pool-id>` |
+| Cognito m2m client | `<cognito-m2m-client-id>` (scope `prometheus-mcp-server/read`) |
+| Cognito domain | `<cognito-domain>` |
 | Token URL | `https://<domain>.auth.us-east-1.amazoncognito.com/oauth2/token` |
-| DevOps Agent capability provider | serviceId `362b7ae4-2e17-4efa-894e-4882f4742d1d` (register-only; agent spaces = 0) |
+| DevOps Agent capability provider | serviceId `<service-id>` (register-only; agent spaces = 0) |
 | MCP tools (PascalCase) | `ExecuteQuery`, `ExecuteRangeQuery`, `ListMetrics`, `GetServerInfo`, `GetAvailableWorkspaces` |
 | CDK stacks | `Open5gsAmpStack`, `PrometheusLambdaMCPCognitoStack`, `PrometheusLambdaMCPStack`, `PrometheusLambdaMCPAPIGatewayStack` |
 
@@ -49,7 +52,7 @@ open5gs NFs (AMF/SMF/UPF) --/metrics:9090--> kube-prometheus-stack (Prometheus a
 |---|---|
 | Cluster | `open5gs-amp-cluster` (k8s 1.31, eksctl) |
 | Nodegroup | `ng-1` — 2× t3.xlarge, private subnets |
-| Node IAM role | `eksctl-open5gs-amp-cluster-nodegro-NodeInstanceRole-qKJHtn13OQyx` |
+| Node IAM role | `<node-instance-role>` |
 | Auth mode | `API_AND_CONFIG_MAP` (node access entry type `EC2_LINUX`, group `system:nodes`) |
 | API endpoint | public+private; `publicAccessCidrs` = `3/5/13/15/18/52/54.0.0.0/8` + NAT `YOUR_ADMIN_IP/32` |
 | Default StorageClass | `gp3` (EBS CSI addon ACTIVE) |

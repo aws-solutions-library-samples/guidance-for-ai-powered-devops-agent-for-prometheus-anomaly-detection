@@ -1,151 +1,216 @@
-# 5G Anomaly Detection with AWS Managed Prometheus
+# Guidance for 5G Network Anomaly Detection and Automated Root-Cause Analysis with Amazon Managed Prometheus and the AWS DevOps Agent
 
-Detect 5G network anomalies using **RCF (Random Cut Forest)** on Amazon Managed Prometheus, then **automatically run root-cause analysis** and hand it to the AWS DevOps Agent. A live open5gs 5G core on EKS generates real registration/session metrics; RCF learns the baseline and fires when infrastructure faults cause subscriber drops; an RCA Lambda correlates the drop to the culprit AMF and — once the DevOps Agent webhook is wired — forwards the incident to it (otherwise it logs the root cause to CloudWatch).
+## Table of Contents
 
-## What It Does
+- [Overview](#overview)
+  - [Architecture](#architecture)
+  - [How it works](#how-it-works)
+  - [Cost](#cost)
+  - [AWS services in this Guidance](#aws-services-in-this-guidance)
+- [Prerequisites](#prerequisites)
+  - [Operating system](#operating-system)
+  - [Tools](#tools)
+  - [AWS account requirements](#aws-account-requirements)
+  - [Supported regions](#supported-regions)
+- [Deployment Steps](#deployment-steps)
+- [Deployment Validation](#deployment-validation)
+- [Running the Guidance](#running-the-guidance)
+- [Next Steps](#next-steps)
+- [Cleanup](#cleanup)
+- [FAQ and Known Issues](#faq-and-known-issues)
+- [Notices](#notices)
+- [Authors](#authors)
 
-```
-1000 UEs → 100 gNBs → 2 AMFs → SMF → 4 UPFs   (open5gs on EKS)
-                         │ metrics (remote_write, SigV4)
-                         ▼
-              Amazon Managed Prometheus (AMP)
-                         │ RCF anomaly detection (score > 0.1)
-                         ▼
-          RCF5GRegistrationDrop alert → AMP Alertmanager → SNS
-                                                            │
-                                                            ▼
-                        RCA Lambda  (queries AMP, names the culprit AMF)
-                                                            │
-                          ┌─────────────────────────────────┴───────────────┐
-                          ▼                                                   ▼
-              DevOps Agent webhook                          (or logs the RCA to CloudWatch
-              (autonomous investigation)                     if no webhook is configured)
-```
+## Overview
 
-**Demo scenario**: a bad config push crashes AMF1 → ~500 users (TAC=1) lose registration → the RCF score spikes → the `RCF5GRegistrationDrop` alert fires → the RCA Lambda identifies AMF1 as the crash-looping culprit and (when its webhook is wired) forwards the incident to the DevOps Agent. AMF2 (the other ~500 users) is unaffected.
+This Guidance detects anomalies in a live **5G mobile core network** using **Random Cut Forest (RCF)** anomaly detection on **Amazon Managed Prometheus (AMP)**, then **automatically runs root-cause analysis (RCA)** and hands the incident to the **AWS DevOps Agent** for an autonomous investigation.
 
-## Architecture
+A real [open5gs](https://open5gs.org/) 5G core (2 AMFs, 1 SMF, 4 UPFs, and supporting network functions) with **1,000 simulated subscribers** (UERANSIM) runs on Amazon EKS and emits registration and session metrics. Prometheus remote-writes those metrics to AMP using SigV4 and IRSA. An RCF detector learns the normal baseline and fires an alert when an infrastructure fault causes a subscriber drop. The alert flows through AMP Alertmanager to Amazon SNS to an RCA Lambda function, which correlates the drop to the culprit network function and posts an incident to the DevOps Agent webhook — which then investigates on its own.
+
+**Use case:** SRE and NOC automation for telco and other high-scale workloads — turning a raw anomaly signal into an attributed, actionable incident with no human in the loop.
+
+**Demo scenario:** a bad config push crashes AMF1 → ~500 subscribers (TAC=1) lose registration → the RCF score spikes → the `RCF5GRegistrationDrop` alert fires → the RCA Lambda identifies AMF1 as the crash-looping culprit and forwards the incident to the DevOps Agent. AMF2 (the other ~500 subscribers) is unaffected.
+
+### Architecture
 
 ![Architecture](docs/diagrams/architecture.svg)
 
-## RCF Data Flow
+### How it works
 
-![RCF Dataflow](docs/diagrams/rcf-dataflow.svg)
+1. open5gs 5G core network functions on Amazon EKS expose Prometheus metrics on port 9090.
+2. kube-prometheus-stack scrapes them and remote-writes to AMP over SigV4 (via an IRSA service account).
+3. An AMP **RCF anomaly detector** scores `sum(fivegs_amffunction_rm_registeredsubnbr)` every 30 seconds.
+4. When the score crosses `0.1`, the `RCF5GRegistrationDrop` alert rule fires.
+5. AMP **Alertmanager** routes the alert to an Amazon **SNS** topic (`open5gs-rcf-rca-trigger`).
+6. The **RCA Lambda** (`open5gs-rcf-rca`) queries AMP (per-AMF registration + pod restarts), names the culprit AMF, and **POSTs an incident to the DevOps Agent webhook** (HMAC or API-key auth; the webhook URL/token live in AWS Secrets Manager and are read at runtime).
+7. The **AWS DevOps Agent** runs an autonomous investigation. It can query AMP directly through the OAuth2-secured **Prometheus MCP** (API Gateway + Amazon Cognito + Lambda) registered as a capability provider.
+8. An **Amazon SageMaker** notebook drives the end-to-end demo: baseline → wire the agent → inject the fault → observe the anomaly → watch the automated investigation → recover.
 
-## Deploy
+![RCF Data Flow](docs/diagrams/rcf-dataflow.svg)
 
-### Prerequisites
-- AWS CLI configured with a profile (account with EKS, AMP, SageMaker permissions)
-- Node.js 18+, CDK CLI (`npm install -g aws-cdk`)
-- kubectl, eksctl, Helm 3
+### Cost
 
-The `deploy/` scripts are numbered in run order:
+You are responsible for the cost of the AWS services used while running this Guidance. As of **August 2026**, the estimated cost for running this Guidance with the default settings in the **US East (N. Virginia)** Region, running continuously for one month, is approximately **$600 USD/month**. Costs drop substantially when the EKS nodegroup is scaled to zero between demos.
 
-### 1. CDK — AMP + RCA pipeline + MCP + Notebook
+We recommend creating a [budget](https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-managing-costs.html) and using the [AWS Pricing Calculator](https://calculator.aws) for the specific configuration and Region you deploy.
+
+| AWS service | Dimension | Estimated cost/month (USD) |
+|---|---|---|
+| Amazon EKS | 1 cluster control plane ($0.10/hr) | $73 |
+| Amazon EC2 | 3 × `t3.xlarge` worker nodes | $365 |
+| Amazon VPC | 1 NAT gateway + data processing | $38 |
+| Amazon EBS | ~200 GB gp3 (nodes + PVCs) | $20 |
+| Amazon Managed Prometheus | metric ingestion + storage + queries | ~$40 |
+| Amazon SageMaker | 1 `ml.t3.medium` notebook (if always on) | $35 |
+| Lambda + SNS + API Gateway + Cognito + Secrets Manager | low-volume control plane | ~$5 |
+| **Total** | | **~$576** |
+
+> These are estimates for illustration only and will vary with usage, Region, and time. Use the AWS Pricing Calculator for an accurate figure.
+
+### AWS services in this Guidance
+
+| Service | Role |
+|---|---|
+| Amazon EKS | Runs the open5gs 5G core + UERANSIM (RAN/UE simulator) |
+| Amazon Managed Prometheus (AMP) | Metric store, RCF anomaly detector, alert rules, Alertmanager |
+| Amazon SNS | Delivers the RCF alert to the RCA Lambda |
+| AWS Lambda | RCA correlation + DevOps Agent webhook forwarding; Prometheus MCP server |
+| Amazon API Gateway + Amazon Cognito | OAuth2-secured MCP endpoint for the DevOps Agent |
+| AWS Secrets Manager | Stores the DevOps Agent webhook URL + token (read at runtime) |
+| Amazon SageMaker | Demo notebook |
+| AWS DevOps Agent | Autonomous incident investigation (external integration) |
+
+## Prerequisites
+
+### Operating system
+
+These instructions are written for **macOS or Linux** with a Bash shell.
+
+### Tools
+
+- **AWS CLI v2**, configured with a named profile. All scripts honor `AWS_PROFILE` and default to `default` if it is not set — export your own profile before running:
+  ```bash
+  export AWS_PROFILE=your-profile        # no profile is hardcoded anywhere
+  ```
+- **Node.js 18+** and the **AWS CDK CLI** (`npm install -g aws-cdk`)
+- **kubectl**, **eksctl**, **Helm 3**, **Python 3.10+**
+
+### AWS account requirements
+
+- An AWS account with permissions to create Amazon EKS, AMP, SageMaker, Lambda, SNS, API Gateway, Cognito, Secrets Manager, and IAM resources.
+- CDK bootstrapped in your account/Region: `cd cdk && cdk bootstrap`.
+- **AWS DevOps Agent (only for the automated-investigation path — optional):**
+  1. **Enable the AWS DevOps Agent** in the console and **create an Agent Space** (an account-level, console/identity-scoped action with no CloudFormation support — it is intentionally left to the operator).
+  2. **Generate a webhook** in the Agent Space (choose **HMAC** — recommended — or **API key** auth) and copy the URL + secret.
+  3. To register the Prometheus MCP as a capability provider (`deploy/20-register-agent.sh`), your account must be **allow-listed for the `devops-agent register-service` API**, which is currently a **gated preview**. If it is not, you will see:
+     ```
+     AccessDeniedException … Account <id> is not authorized. Only external accounts and exempted accounts are allowed at this time.
+     ```
+     This step is **optional and non-blocking** — `deploy/20` detects this and skips gracefully. The DevOps Agent is still *triggered* by the webhook; the MCP registration only lets it *query* AMP during an investigation.
+
+### Supported regions
+
+This Guidance defaults to **`us-east-1`** and is Region-overridable (`export AWS_REGION=...`). Use a Region where all listed services — including AMP, SageMaker, and (if used) the AWS DevOps Agent — are available.
+
+## Deployment Steps
+
+The `deploy/` scripts are numbered in run order. Set your profile first: `export AWS_PROFILE=your-profile`.
+
 ```bash
-export AWS_PROFILE=your-profile
-./deploy/10-deploy-cdk.sh      # or: cd cdk && npm install && cdk bootstrap && cdk deploy --all --require-approval never
-```
-Creates: AMP workspace, RCF anomaly detector, alert rules, **the automated RCA pipeline** (SNS topic + RCA Lambda + Alertmanager routing + the DevOps Agent webhook secret), Prometheus MCP (Lambda/API GW/Cognito), and the SageMaker Notebook.
+# 1. Control plane — AMP + RCF + automated RCA pipeline + Prometheus MCP + SageMaker notebook (CDK)
+./deploy/10-deploy-cdk.sh          # or: cd cdk && npm install && cdk bootstrap && cdk deploy --all --require-approval never
 
-### 2. (Optional) Register the MCP with the DevOps Agent
-```bash
-./deploy/20-register-agent.sh
-```
-Registers the Prometheus MCP (API Gateway) as a DevOps Agent capability provider (OAuth2, **register-only** — reads the Cognito secret at runtime, never creates an Agent Space). Skip if you aren't using the DevOps Agent.
+# 2. (Optional) Register the Prometheus MCP with the AWS DevOps Agent (register-only; see Prerequisites)
+./deploy/20-register-agent.sh      # skips gracefully if the account isn't allow-listed
 
-### 3. EKS + Prometheus
-```bash
+# 3. EKS cluster (3 nodes) + kube-prometheus-stack remote-writing to AMP
 ./deploy/30-eks-open5gs.sh
-```
-Creates: EKS cluster (3 nodes) + kube-prometheus-stack with remote_write to AMP.
 
-### 4. 5G Core + 1000 UEs
-```bash
+# 4. open5gs 5G core + 1000 UERANSIM subscribers
 ./deploy/50-open5gs.sh
-```
-Creates: open5gs NFs (2 AMFs, 4 UPFs, shared CP), 1000 UERANSIM UEs across 4 DNNs, provisions subscribers.
 
-### 5. Grant the notebook EKS access
-```bash
+# 5. Grant the SageMaker notebook IAM role access to the EKS cluster (required for the notebook's kubectl cells)
 ./deploy/60-grant-notebook-eks-access.sh
 ```
-Grants the SageMaker notebook's IAM role access to the EKS cluster. **Required** — without it the notebook's `kubectl` cells (fault injection) hang/fail.
 
-### 6. (Optional) Verify + wire the DevOps Agent webhook
-```bash
-./deploy/40-verify-amp.sh              # checks metrics land in AMP + the agent MCP path works
-./deploy/70-wire-agent-webhook.sh      # after creating a DevOps Agent Space: sets the webhook URL + token (entered hidden)
-```
-Until the webhook is wired the RCA Lambda still runs and **logs** the root cause to CloudWatch. See [Automated RCA → DevOps Agent](#automated-rca--devops-agent).
+Step 1 creates: the AMP workspace, RCF anomaly detector, alert rules, the automated RCA pipeline (SNS topic + RCA Lambda + Alertmanager routing + the empty DevOps Agent webhook secret), the Prometheus MCP (Lambda / API Gateway / Cognito), and the SageMaker notebook.
 
-### 7. Open the Demo Notebook
-Go to **SageMaker → Notebook Instances → open5gs-rcf-anomaly-demo → Open Jupyter** and run `rcf-anomaly-detection-demo.ipynb`:
-1. Verify baseline (1000 UEs registered, RCF score = 0)
-2. Inject fault (bad config → AMF1 crashes)
-3. Observe anomaly (RCF score spikes, ~500 users drop)
-4. Root-cause analysis (correlate with pod restarts)
-5. Recovery (fix config → users re-register)
-
-## Automated RCA → DevOps Agent
-
-When registration drops, the RCF score crosses 0.1 and the `RCF5GRegistrationDrop` alert fires. From there the pipeline runs with no human in the loop:
-
-```
-RCF5GRegistrationDrop (score > 0.1, 30s eval)
-  → AMP Alertmanager → SNS topic (open5gs-rcf-rca-trigger)
-    → RCA Lambda (open5gs-rcf-rca): queries AMP for per-AMF registration + pod restarts,
-      identifies the down / crash-looping AMF, builds a root-cause summary
-      → POSTs an incident to the DevOps Agent webhook   (Authorization: Bearer <token>)
-        └─ if no webhook is configured: logs the RCA to CloudWatch instead
-```
-
-### Wiring the DevOps Agent webhook
-The webhook URL + token live in a **Secrets Manager secret** (`open5gs/devops-agent/webhook`) that the Lambda reads **at runtime** — so you fill it in after creating the Agent Space, with no code change and no redeploy:
-
-- **Script (repeatable):** `./deploy/70-wire-agent-webhook.sh` — prompts for the URL and token (token entered hidden and written via a `0600` temp file, so it never lands in shell history or `ps`), then optionally fires a test alert and shows the POST result.
-- **Console (one-off):** Secrets Manager → `open5gs/devops-agent/webhook` → *Retrieve secret value → Edit* → set `url` and `token` → Save.
-
-Rotating the token is the same action (re-run the script or edit the secret); the Lambda picks up the new value on the next alert.
-
-> **Why the Agent Space isn't in CDK:** activating the DevOps Agent and creating the Agent Space are account-level, console/identity-scoped actions with no CloudFormation support, so they're intentionally left to the operator. CDK owns the reproducible plumbing (AMP, RCF, SNS, Lambda, and the empty webhook secret); the human supplies only the webhook value.
-
-## Quick Fault Injection (CLI)
+## Deployment Validation
 
 ```bash
-# Break AMF1 (~500 TAC=1 users lose service; AMF2 unaffected)
+# CloudFormation stacks are CREATE/UPDATE_COMPLETE
+aws cloudformation describe-stacks --query "Stacks[].StackName" --output text
+
+# Metrics are landing in AMP (direct SigV4). Expect fivegs_amffunction_rm_registeredsubnbr and session counts.
+./deploy/40-verify-amp.sh
+```
+- In the EKS cluster: `kubectl get pods -n open5gs` shows the 5G network functions Running, and `kubectl get pods -n monitoring` shows Prometheus Running.
+- In the console: **Amazon Managed Prometheus** shows the workspace and the `5g-registered-subscribers` anomaly detector; **SageMaker → Notebook instances** shows `open5gs-rcf-anomaly-demo` **InService**.
+
+## Running the Guidance
+
+Open **SageMaker → Notebook Instances → `open5gs-rcf-anomaly-demo` → Open Jupyter** and run `rcf-anomaly-detection-demo.ipynb`. The notebook is ordered so the DevOps Agent is wired **before** the fault:
+
+1. **Step 1** — verify the healthy baseline (1000 subscribers registered, RCF score 0).
+2. **Step 2 — Set up & wire the AWS DevOps Agent (before the fault).** Follow the in-notebook guidance to create the Agent Space, add the MCP capability, and generate a webhook. Paste the **webhook URL + secret** into the placeholder cell, set the auth type (`hmac` or `bearer`), and run the **wiring cell** — it stores `{url, token, auth}` in Secrets Manager (`open5gs/devops-agent/webhook`), which the RCA Lambda reads at runtime.
+3. **Step 3** — inject the fault (bad config → AMF1 CrashLoopBackOff → ~500 subscribers drop).
+4. **Step 4** — observe the anomaly (the RCF score spikes; use the range query in UTC to catch the single-cycle spike).
+5. **Step 5 — the DevOps Agent investigates automatically.** The RCF alert → SNS → RCA Lambda → your webhook, and the agent starts an autonomous investigation. Open **Agent Space → Incidents** to watch it; the notebook also confirms the webhook is wired and prints the ground-truth signals.
+6. **Step 6** — recover (restore config, subscribers re-register to 1000).
+
+### Quick fault injection (CLI alternative)
+
+```bash
+# Break AMF1 (~500 TAC=1 subscribers lose service; AMF2 unaffected)
 ./manifests/fault-inject-amf1.sh break
 
-# The RCF alert fires → the RCA Lambda names AMF1 as the culprit. Watch it:
-#   aws logs tail /aws/lambda/open5gs-rcf-rca --follow          (AWS CLI v2)
-# Or check the score:
-#   anomaly_detector:score{alias="5g-registered-subscribers"} > 0.1
+# The RCF alert fires -> the RCA Lambda names AMF1 and POSTs to the DevOps Agent webhook. Watch the Lambda:
+#   aws logs filter-log-events --log-group-name /aws/lambda/open5gs-rcf-rca --start-time <epoch-ms>
+#   (look for "Agent webhook status: 2xx")
 
 # Fix it (restores config + restarts the TAC=1 gNBs to re-register)
 ./manifests/fault-inject-amf1.sh fix
 ```
 
-## Components
+If no webhook is configured, the RCA Lambda still runs and **logs** the root cause to CloudWatch. See [`docs/DEMO-RUNBOOK.md`](docs/DEMO-RUNBOOK.md) for the full step-by-step walkthrough and correlation queries.
 
-| Layer | Components |
-|---|---|
-| **RAN** | 100 gNBs (UERANSIM StatefulSets, 10 UEs each = 1000 UEs) |
-| **Core** | 2 AMFs (TAC partitioned), SMF, 4 UPFs, NRF/AUSF/UDM/UDR/PCF/NSSF/BSF |
-| **Monitoring** | kube-prometheus-stack → remote_write (SigV4/IRSA) → AMP |
-| **Detection** | RCF anomaly detector on `sum(fivegs_amffunction_rm_registeredsubnbr)` |
-| **Automated RCA** | RCF alert → Alertmanager → SNS → RCA Lambda → DevOps Agent webhook (URL/token in Secrets Manager) |
-| **Access** | Prometheus MCP (OAuth2/API GW) for the DevOps Agent; SageMaker Notebook for humans |
+## Next Steps
 
-## Teardown
+- Wire the DevOps Agent webhook (Step 2 / `deploy/70-wire-agent-webhook.sh`) once your Agent Space exists, to see the fully autonomous investigation.
+- Add more RCF detectors (session count per UPF, PDU-session establishment rate) for richer anomaly coverage.
+- Extend the RCA Lambda to attach additional context (recent ConfigMap changes, node conditions) to the incident payload.
+- Adapt the pattern to your own workload: point Prometheus/AMP at your metrics, define an RCF detector on your key SLI, and reuse the SNS → Lambda → DevOps Agent bridge.
+
+## Cleanup
 
 ```bash
+# 5G workload + UE simulators
 kubectl delete -f manifests/ueransim-multi.yaml
 kubectl delete -f manifests/open5gs-core-multi.yaml
-eksctl delete cluster --name open5gs-amp-cluster    # deletes the EKS cluster + nodegroup
-cd cdk && cdk destroy --all                          # removes AMP, RCA pipeline (SNS/Lambda/secret), MCP, notebook
+
+# EKS cluster + nodegroup
+eksctl delete cluster --name open5gs-amp-cluster
+
+# All CDK resources (AMP, RCA pipeline SNS/Lambda/secret, MCP, notebook)
+cd cdk && cdk destroy --all
 ```
 
-## Docs
-- [`docs/CONTEXT.md`](docs/CONTEXT.md) — live resource IDs, critical fixes, resume checklist
+## FAQ and Known Issues
+
+- **`deploy/20` fails with `AccessDeniedException … Only external and exempted accounts are allowed`.** The `devops-agent register-service` API is a gated preview; your account isn't allow-listed. This step is optional and the script now skips it gracefully — the webhook path still works. Request allow-listing to enable it later. See [Prerequisites](#aws-account-requirements).
+- **The RCF score reads 0 right after the fault.** The score spikes for a single ~30-second cycle, then the model adapts. Query the score over a **time range in UTC** (as the notebook does) rather than an instant query.
+- **The EKS nodegroup scaled to 0 / `kubectl` shows no nodes.** Idle-automation may scale the nodegroup to zero. Re-scale: `aws eks update-nodegroup-config --cluster-name open5gs-amp-cluster --nodegroup-name ng-1 --scaling-config minSize=2,maxSize=3,desiredSize=2`.
+
+## Notices
+
+Customers are responsible for making their own independent assessment of the information in this Guidance. This Guidance: (a) is for informational purposes only, (b) represents AWS current product offerings and practices, which are subject to change without notice, and (c) does not create any commitments or assurances from AWS and its affiliates, suppliers, or licensors. AWS products or services are provided "as is" without warranties, representations, or conditions of any kind, whether express or implied. AWS responsibilities and liabilities to its customers are controlled by AWS agreements, and this Guidance is not part of, nor does it modify, any agreement between AWS and its customers.
+
+## Authors
+
+- Mohamed Sherif
+
+## Related documentation
+
 - [`docs/DEMO-RUNBOOK.md`](docs/DEMO-RUNBOOK.md) — step-by-step demo with correlation queries
-- [`setup_guide.md`](setup_guide.md) — detailed deploy/verify/troubleshoot guide
+- [`setup_guide.md`](setup_guide.md) — detailed deploy / verify / troubleshoot guide
+- [`docs/CONTEXT.md`](docs/CONTEXT.md) — internal engineering reference (not required for deployment)
