@@ -13,7 +13,7 @@ This notebook demonstrates **Amazon Managed Prometheus RCF anomaly detection** o
 
 **Scale**: `1000 UEs → 100 gNBs → 2 AMFs → SMF → 4 UPFs` (open5gs on EKS), 250 PDU sessions per UPF, continuous user-plane traffic.
 
-**Scenario**: A bad config push to AMF1 crashes it (CrashLoopBackOff), so **~500 of 1000 UEs** lose registration. RCF flags the drop within one 30s evaluation cycle. We then correlate with infrastructure metrics to pinpoint root cause, and recover.
+**Scenario**: A bad config push to AMF1 crashes it (CrashLoopBackOff), so **~500 of 1000 UEs** lose registration. RCF flags the drop within one 30s evaluation cycle, which **automatically triggers the AWS DevOps Agent** (RCF alert → Alertmanager → SNS → an RCA Lambda → the agent's webhook) to investigate and pinpoint root cause. We then recover.
 
 ---
 ## Architecture
@@ -173,8 +173,45 @@ print(f'  TOTAL: {tot_kb:.1f} KB/s flowing through the user plane')
 print()
 print('\u2713 Data plane active' if tot_kb > 1 else '\u26a0 No traffic \u2014 check traffic-gen / ogstun on UPFs')''')
 
-# ---- Step 2: fault ----
-md("""## Step 2: Inject Fault (Bad Config Push to AMF1)
+# ---- Step 2: set up + wire the DevOps Agent (BEFORE the fault) ----
+md("""## Step 2: Set up & Wire the AWS DevOps Agent  (do this BEFORE the fault)
+
+So the anomaly **automatically launches an AI investigation**, wire the DevOps Agent now — before injecting the fault.
+
+**One-time setup in the AWS console:**
+1. **Create an Agent Space** — in the AWS DevOps Agent console, create an Agent Space (an isolated workspace with its own account access, users, data, and chat history).
+2. **Add the Prometheus MCP capability** — Agent Space → *Capabilities* → add an MCP capability provider pointing at the API Gateway `/mcp` endpoint this project deployed (`https://<api-id>.execute-api.<region>.amazonaws.com/prod/mcp`, OAuth2 client-credentials from the Cognito stack). This lets the agent **query AMP** during its investigation. *(`deploy/20-register-agent.sh` registers this endpoint for you.)*
+3. **Generate a webhook** — Agent Space → *Capabilities* → *Webhook* → **Generate webhook**, then pick an auth type:
+   - **HMAC** *(recommended)* — each request is signed; verified via the `x-amzn-event-signature` header.
+   - **API key** — sent as `Authorization: Bearer <secret>`.
+   Copy the **webhook URL** and the **secret** (the secret is shown only once).
+
+Paste those two values into the next cell, set the matching auth type, then run the **wiring cell**. The RCA Lambda (`open5gs-rcf-rca`) reads them from Secrets Manager **at runtime**, so the instant RCF fires it POSTs the incident and the agent starts investigating — no redeploy needed.""")
+
+code('''# \u2500\u2500\u2500 PASTE your DevOps Agent webhook details here \u2500\u2500\u2500
+DEVOPS_AGENT_WEBHOOK_URL    = "PASTE_YOUR_WEBHOOK_URL_HERE"
+DEVOPS_AGENT_WEBHOOK_SECRET = "PASTE_YOUR_WEBHOOK_SECRET_HERE"
+DEVOPS_AGENT_AUTH           = "hmac"   # "hmac" (x-amzn-event-signature) or "bearer" (Authorization: Bearer)
+print("Values set. Run the next cell to wire them into Secrets Manager.")''')
+
+code('''# Wire the webhook into the RCA Lambda's Secrets Manager secret (read at runtime -> no redeploy).
+import boto3, json as _json
+_SECRET_ID = "open5gs/devops-agent/webhook"
+if "PASTE_" in DEVOPS_AGENT_WEBHOOK_URL or "PASTE_" in DEVOPS_AGENT_WEBHOOK_SECRET:
+    print("\u2717 Fill in the URL and SECRET in the cell above first, then re-run this cell.")
+elif DEVOPS_AGENT_AUTH not in ("hmac", "bearer"):
+    print('\u2717 DEVOPS_AGENT_AUTH must be "hmac" or "bearer".')
+else:
+    boto3.client("secretsmanager", region_name=REGION).put_secret_value(
+        SecretId=_SECRET_ID,
+        SecretString=_json.dumps({"url": DEVOPS_AGENT_WEBHOOK_URL,
+                                  "token": DEVOPS_AGENT_WEBHOOK_SECRET,
+                                  "auth": DEVOPS_AGENT_AUTH}))
+    print(f"\u2713 Webhook wired into Secrets Manager ({_SECRET_ID}), auth={DEVOPS_AGENT_AUTH}.")
+    print("  Pipeline armed:  RCF fires \u2192 SNS \u2192 open5gs-rcf-rca Lambda \u2192 POST to your webhook \u2192 DevOps Agent investigates.")''')
+
+# ---- Step 3: fault ----
+md("""## Step 3: Inject Fault (Bad Config Push to AMF1)
 
 Pushes a broken config (the required `time.t3512` field is **removed**) to AMF1. open5gs `amfd` fails to
 start \u2192 CrashLoopBackOff \u2192 **~500 UEs (TAC=1) deregister**. AMF2 (TAC=2) is unaffected.
@@ -242,8 +279,8 @@ if ok:
 else:
     print('\u2717 Could not generate config \u2014 check kubectl is installed (Setup cell).')''')
 
-# ---- Step 3: observe ----
-md("""## Step 3: Observe the Anomaly
+# ---- Step 4: observe ----
+md("""## Step 4: Observe the Anomaly
 
 **Key technique:** the RCF score spikes for a **single ~30s cycle** at the moment of the drop, then the
 model adapts and the score returns to 0. An **instant** query usually shows 0 (you miss the spike), so we
@@ -274,13 +311,37 @@ print()
 print(f'  Peak RCF score in window: {peak:.3f}   ' + ('\u2190 RCF FIRED \u2713' if peak > 0.1
       else '(no spike yet \u2014 re-run in ~30s if the fault was just injected)'))''')
 
-# ---- Step 4: root cause ----
-md("""## Step 4: Root Cause Analysis
+# ---- Step 5: the DevOps Agent investigates (automated) ----
+md("""## Step 5: The AWS DevOps Agent Investigates (Automated RCA)
 
-Correlate the registration drop with infrastructure signals. All signals should align in time:
-the registration drop, the RCF score spike, and the AMF1 restart count climbing.""")
+This is the payoff. The moment the RCF score crossed the threshold in Step 4, the `RCF5GRegistrationDrop`
+alert fired and the pipeline ran **with no human in the loop**:
 
-code('''print('\u2550\u2550\u2550 ROOT CAUSE ANALYSIS \u2550\u2550\u2550\\n')
+`RCF alert → AMP Alertmanager → SNS (open5gs-rcf-rca-trigger) → RCA Lambda (open5gs-rcf-rca) → your DevOps Agent webhook`
+
+The RCA Lambda queried AMP (per-AMF registration + AMF pod restarts), identified the crash-looping AMF, and
+POSTed an incident to the webhook you wired in **Step 2** — so the **AWS DevOps Agent has already started an
+autonomous investigation**. Open your **Agent Space → Incidents** in the DevOps Agent web app to watch its
+timeline and root-cause finding.
+
+The cell below (1) confirms the webhook is still wired, then (2) prints the same signals the agent correlates,
+so you can compare its conclusion against ground truth.""")
+
+code('''# Confirm the pipeline is armed (the webhook the RCA Lambda POSTs to when RCF fires)
+import boto3, json as _json
+try:
+    _raw = boto3.client("secretsmanager", region_name=REGION).get_secret_value(
+        SecretId="open5gs/devops-agent/webhook")["SecretString"]
+    _cfg = _json.loads(_raw)
+    if _cfg.get("url") and "PASTE_" not in _cfg.get("url", ""):
+        print("Webhook wired (auth=" + str(_cfg.get("auth", "?")) + ") - RCF alerts POST to the DevOps Agent.")
+        print("  Open the DevOps Agent Space -> Incidents to watch the live investigation.")
+    else:
+        print("Webhook NOT set - re-run the Step 2 wiring cell (until then the RCA Lambda only logs to CloudWatch).")
+except Exception as e:
+    print("Could not read webhook secret: " + str(e)[:120])''')
+
+code('''print('\u2550\u2550\u2550 SIGNALS THE AGENT CORRELATES \u2550\u2550\u2550\\n')
 print('1. Per-AMF breakdown (blast radius):')
 for r in sorted(query_amp('fivegs_amffunction_rm_registeredsubnbr'), key=lambda x: x['metric'].get('pod','')):
     pod = r['metric'].get('pod', ''); v = int(r['value'][1])
@@ -306,13 +367,13 @@ ok, out, _ = run_kubectl(['get', 'pod', '-n', 'open5gs', '-l', 'app=amf1', '-o',
     'jsonpath={.items[0].status.containerStatuses[0].lastState.terminated.reason}: exit {.items[0].status.containerStatuses[0].lastState.terminated.exitCode}'], timeout=15)
 print(f'   {out.strip() or "(pod healthy / no recent termination)"}')
 print()
-print('\u2550\u2550\u2550 CONCLUSION \u2550\u2550\u2550')
+print('\u2550\u2550\u2550 GROUND TRUTH (compare with the agent finding) \u2550\u2550\u2550')
 print('Root cause : AMF1 in CrashLoopBackOff after a config change (missing time.t3512, exit 255).')
 print('Impact     : ~500 users on TAC=1 lost registration. AMF2 (TAC=2) healthy \u2014 blast radius isolated.')
 print('Remediation: Roll back the amf1-config ConfigMap (Step 5).')''')
 
-# ---- Step 5: recovery ----
-md("""## Step 5: Recovery
+# ---- Step 6: recovery ----
+md("""## Step 6: Recovery
 
 Restore the valid config (with `time.t3512`), let AMF1 become healthy, then restart the TAC=1 gNBs so
 their ~500 UEs re-register. Registration ramps back to 1000.""")
@@ -395,7 +456,7 @@ md("""---
 ### Key Takeaways
 1. **RCF detects onset instantly** \u2014 a 50% subscriber drop spikes the score to ~1.0 within one 30s cycle.
 2. **Capture the spike with a range query** \u2014 the score returns to 0 as the model adapts, so an instant query misses it. Always query the score over a time range (in **UTC**).
-3. **Infra correlation pinpoints root cause** \u2014 AMF1 restart count climbs at the same timestamp as the drop; the per-AMF breakdown shows the blast radius (TAC=1 only).
+3. **The DevOps Agent pinpoints root cause automatically** \u2014 AMF1 restart count climbs at the same timestamp as the drop; the per-AMF breakdown shows the blast radius (TAC=1 only).
 4. **Data-plane throughput** uses `container_network_*_bytes_total` (the open5gs `fivegs_ep_n3_gtp_*` counters are not wired in 2.6.6).
 5. **Fast, isolated recovery** \u2014 fix config, restart, UEs auto-re-register; AMF2 never affected.""")
 

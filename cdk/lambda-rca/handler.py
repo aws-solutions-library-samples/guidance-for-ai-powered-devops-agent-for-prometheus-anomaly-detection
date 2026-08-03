@@ -8,16 +8,21 @@ AMF pod restarts, queried from AMP via SigV4), derives a root-cause summary, log
 and — if a DevOps Agent webhook is configured — POSTs an incident payload to it.
 
 Webhook config (runtime lookup, no redeploy needed):
-  1. Secrets Manager secret (AGENT_WEBHOOK_SECRET_ARN) holding JSON {"url","token"} — preferred.
+  1. Secrets Manager secret (AGENT_WEBHOOK_SECRET_ARN) holding JSON {"url","token","auth"} — preferred.
+     "auth" is "hmac" (x-amzn-event-signature) or "bearer" (Authorization: Bearer).
      A human fills this in AFTER creating the Agent Space (console or deploy/70-wire-agent-webhook.sh);
      the value never flows through CDK.
   2. DEVOPS_AGENT_WEBHOOK_URL env var — fallback (no auth token).
 Dependency-free: uses the boto3/botocore + urllib bundled in the Lambda runtime.
 """
+import base64
+import hashlib
+import hmac
 import json
 import os
 import urllib.request
 import urllib.parse
+from datetime import datetime, timezone
 
 import boto3
 from botocore.auth import SigV4Auth
@@ -50,8 +55,9 @@ def query_amp(promql):
 
 
 def get_webhook():
-    """Return (url, token). Prefer the Secrets Manager secret; fall back to the env var.
+    """Return (url, token, auth). Prefer the Secrets Manager secret; fall back to the env var.
 
+    'auth' is "hmac" (sign with x-amzn-event-signature) or "bearer" (Authorization: Bearer).
     Read fresh each invocation so a rotated secret takes effect without redeploy
     (alerts are low-frequency, so the extra GetSecretValue is negligible).
     """
@@ -61,11 +67,12 @@ def get_webhook():
             data = json.loads(raw) if raw else {}
             url = (data.get("url") or "").strip()
             token = (data.get("token") or "").strip()
+            auth = (data.get("auth") or "").strip().lower()
             if url:
-                return url, token
+                return url, token, auth
         except Exception as e:  # noqa: BLE001
             print("WARN: could not read webhook secret:", str(e))
-    return AGENT_WEBHOOK_ENV.strip(), ""
+    return AGENT_WEBHOOK_ENV.strip(), "", ""
 
 
 def handler(event, context):
@@ -101,25 +108,36 @@ def handler(event, context):
 
     print("RCA_REPORT:", json.dumps(report, indent=2))
 
-    url, token = get_webhook()
+    url, token, auth = get_webhook()
     if url:
         try:
-            headers = {"Content-Type": "application/json"}
-            if token:
-                headers["Authorization"] = f"Bearer {token}"
-            payload = json.dumps({
+            ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+            # Serialize the body ONCE; the exact same string is what we sign and send.
+            body = json.dumps({
                 "eventType": "incident",
                 "incidentId": "RCF5GRegistrationDrop",
                 "action": "created",
                 "priority": "HIGH",
                 "title": "5G registration anomaly (RCF)",
                 "description": report.get("root_cause", ""),
+                "timestamp": ts,
                 "service": "open5gs-amf",
                 "data": {"metadata": report.get("findings", {})},
-            }).encode()
-            wr = urllib.request.Request(url, data=payload, headers=headers, method="POST")
+            }, separators=(",", ":"))
+            headers = {"Content-Type": "application/json"}
+            if auth == "hmac":
+                # AWS DevOps Agent HMAC: base64(HMAC-SHA256(secret, f"{ts}:{body}"))
+                sig = base64.b64encode(
+                    hmac.new(token.encode("utf-8"), f"{ts}:{body}".encode("utf-8"),
+                             hashlib.sha256).digest()
+                ).decode()
+                headers["x-amzn-event-timestamp"] = ts
+                headers["x-amzn-event-signature"] = sig
+            elif token:
+                headers["Authorization"] = f"Bearer {token}"
+            wr = urllib.request.Request(url, data=body.encode("utf-8"), headers=headers, method="POST")
             with urllib.request.urlopen(wr, timeout=15) as resp:
-                print("Agent webhook status:", resp.status)
+                print(f"Agent webhook status: {resp.status} (auth={auth or 'bearer/none'})")
         except Exception as e:  # noqa: BLE001
             print("Agent webhook POST failed:", str(e))
     else:

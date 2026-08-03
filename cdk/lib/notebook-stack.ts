@@ -72,6 +72,22 @@ export class NotebookStack extends cdk.Stack {
             }),
           ],
         }),
+        DevOpsAgentWebhookSecret: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              // Lets the demo notebook's "wire the DevOps Agent" cell store the webhook
+              // URL + secret so the RCA Lambda forwards incidents. Scoped to that one secret.
+              actions: [
+                'secretsmanager:GetSecretValue',
+                'secretsmanager:PutSecretValue',
+                'secretsmanager:DescribeSecret',
+              ],
+              resources: [
+                `arn:aws:secretsmanager:${this.region}:${this.account}:secret:open5gs/devops-agent/webhook-*`,
+              ],
+            }),
+          ],
+        }),
       },
     });
 

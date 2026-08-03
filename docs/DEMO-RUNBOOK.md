@@ -46,35 +46,62 @@ export AWS_PROFILE=YOUR_AWS_PROFILE
 aws eks update-kubeconfig --region us-east-1 --name open5gs-amp-cluster
 ```
 
-### 1. Verify baseline (before fault)
+### 1. Set up & wire the AWS DevOps Agent  ← do this BEFORE the fault
+So the anomaly **automatically launches an investigation**, wire the agent first:
+1. **Create an Agent Space** in the AWS DevOps Agent console (isolated workspace: account access, users, data, chat history).
+2. **Add the Prometheus MCP** as a capability provider, pointing at the `/mcp` API Gateway endpoint this project deployed (OAuth2 client-credentials from the Cognito stack):
+   ```bash
+   ./deploy/20-register-agent.sh
+   ```
+3. **Generate a webhook** — Agent Space → Capabilities → Webhook → *Generate webhook*. Pick an auth type:
+   **HMAC** (recommended — signed, verified via `x-amzn-event-signature`) or **API key** (`Authorization: Bearer`). Copy the URL + secret (shown once).
+4. **Wire it** so the RCA Lambda forwards incidents (secret is read at runtime — no redeploy):
+   ```bash
+   ./deploy/70-wire-agent-webhook.sh        # prompts for URL + secret (hidden) + auth type
+   ```
+   (Or run the notebook's **Step 2** wiring cell.) Stores `{url, token, auth}` in Secrets Manager `open5gs/devops-agent/webhook`.
+
+### 2. Verify baseline (before fault)
 ```bash
 # sum(fivegs_amffunction_rm_registeredsubnbr) should be 1000 (AMF1=500, AMF2=500)
 # anomaly_detector:score{alias="5g-registered-subscribers"} should be 0
 ./manifests/fault-inject-amf1.sh status
 ```
 
-### 2. Inject fault
+### 3. Inject fault
 ```bash
 ./manifests/fault-inject-amf1.sh break    # removes time.t3512 → AMF1 CrashLoopBackOff
 ```
 
-### 3. Watch the drop + score spike (within 30-60s)
+### 4. Watch the automated DevOps Agent investigation
+The fault crosses the RCF threshold and the pipeline runs with **no human in the loop**:
+```
+RCF5GRegistrationDrop (score > 0.1) → AMP Alertmanager → SNS (open5gs-rcf-rca-trigger)
+  → RCA Lambda (open5gs-rcf-rca) → your DevOps Agent webhook → autonomous investigation
+```
 ```bash
 kubectl get pods -n open5gs -l app=amf1 -w     # AMF1 → CrashLoopBackOff
-# RCF score (RANGE query in UTC — captures the single-cycle spike):
-#   anomaly_detector:score{alias="5g-registered-subscribers"}  over last 15m, step 30s
+# Confirm the Lambda forwarded the incident (look for "Agent webhook status: 2xx"):
+#   aws logs filter-log-events --log-group-name /aws/lambda/open5gs-rcf-rca --start-time <epoch-ms>
 ```
+Then open **DevOps Agent Space → Incidents** — the agent has started investigating and will surface the
+root cause (AMF1 CrashLoopBackOff, missing `time.t3512`). If the webhook isn't wired, the Lambda still
+logs the RCA to CloudWatch.
 
-### 4. Recover
+### 5. Recover
 ```bash
 ./manifests/fault-inject-amf1.sh fix       # restores config + restarts gnb1a/gnb1b
 ```
 
-The notebook (`cdk/notebook/rcf-anomaly-detection-demo.ipynb`) runs all of this with annotated output.
+The notebook (`cdk/notebook/rcf-anomaly-detection-demo.ipynb`) runs all of this with annotated output —
+including the **Step 2** agent-wiring cells (before the fault) and the **Step 5** automated-investigation confirmation.
 
 ---
 
-## DevOps Agent Correlation Queries
+## What the DevOps Agent Correlates (reference)
+
+These are the signals the DevOps Agent queries (via the Prometheus MCP) during its **automated** investigation
+in step 4 above. Run them manually only if you want to verify the agent's conclusion against ground truth.
 
 ### Step 1: Confirm the anomaly — USE A RANGE QUERY FOR THE SCORE
 ```promql
