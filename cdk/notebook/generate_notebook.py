@@ -121,7 +121,7 @@ subprocess.run(['aws', 'eks', 'update-kubeconfig', '--region', REGION, '--name',
                capture_output=True, timeout=60)
 
 print(f'\u2713 AMP workspace: {WORKSPACE_ID}  |  Region: {REGION}  |  EKS: {EKS_CLUSTER}')
-ok, out, err = run_kubectl(['get', 'nodes', '--no-headers'], timeout=15)
+ok, out, err = run_kubectl(['get', 'nodes', '--no-headers'], timeout=45)
 print(f'\u2713 kubectl connected: {len(out.strip().splitlines())} nodes ready' if ok
       else '\u2717 kubectl NOT connected \u2014 fix EKS access before fault-injection cells.')''')
 
