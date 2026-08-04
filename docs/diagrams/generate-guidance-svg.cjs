@@ -22,7 +22,7 @@ const S = [];
 // ── background + arrow markers ──
 S.push(`<rect x="0" y="0" width="${W}" height="${H}" fill="${WHITE}"/>`);
 const marker = (id,c) => `<marker id="${id}" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,3 L0,6" fill="none" stroke="${c}" stroke-width="1.4"/></marker>`;
-S.push(`<defs>${marker('aG',GREEN)}${marker('aGray',GRAY)}${marker('aP',PURPLE)}${marker('aR',RED)}</defs>`);
+S.push(`<defs>${marker('aK','#000000')}</defs>`);
 
 // ── title + description + separator ──
 (function(){ const words='Guidance for 5G Network Anomaly Detection and Automated Root Cause Analysis on AWS'.split(' '); let line='', first=true; const max=52;
@@ -30,10 +30,10 @@ S.push(`<defs>${marker('aG',GREEN)}${marker('aGray',GRAY)}${marker('aP',PURPLE)}
   words.forEach(w=>{ if((line+' '+w).trim().length>max){ t.push(`<tspan x="${x(0.12)}" dy="${first?0:27}">${esc(line)}</tspan>`); line=w; first=false; } else line=(line?line+' ':'')+w; });
   t.push(`<tspan x="${x(0.12)}" dy="${first?0:27}">${esc(line)}</tspan></text>`); S.push(t.join(''));
 })();
-const desc = 'Amazon Managed Service for Prometheus applies Random Cut Forest anomaly detection to a live 5G core. When an anomaly fires, an AWS Lambda function forwards the alert to the AWS DevOps Agent, which autonomously investigates and identifies the failing network function.';
+const desc = 'This architecture diagram shows how Amazon Managed Service for Prometheus detects anomalies in a live 5G core and automatically triggers the AWS DevOps Agent to investigate and identify the failing network function.';
 // wrap description across ~2 lines
 (function(){ const words=desc.split(' '); let line='', ly=x(0.98); const max=150;
-  const t=[`<text x="${x(0.12)}" y="${ly}" font-family="${FF}" font-size="13.5" fill="${GRAY}">`];
+  const t=[`<text x="${x(0.12)}" y="${ly}" font-family="${FF}" font-size="13.5" fill="#000000">`];
   let first=true;
   words.forEach(w=>{ if((line+' '+w).trim().length>max){ t.push(`<tspan x="${x(0.12)}" dy="${first?0:16}">${esc(line)}</tspan>`); line=w; first=false; } else line=(line?line+' ':'')+w; });
   t.push(`<tspan x="${x(0.12)}" dy="${first?0:16}">${esc(line)}</tspan></text>`); S.push(t.join(''));
@@ -49,7 +49,7 @@ const steps = [
   '**Amazon Managed Service for Prometheus** runs a Random Cut Forest (RCF) anomaly detector on the registered-subscriber count, emitting an anomaly score every 30 seconds.',
   'When the score crosses the threshold, Alertmanager publishes to an **Amazon Simple Notification Service (Amazon SNS)** topic.',
   '**Amazon SNS** invokes the forwarder **AWS Lambda** function.',
-  '**AWS Lambda** reads the DevOps Agent webhook URL and token from **AWS Secrets Manager** and posts the incident (it does not investigate).',
+  '**AWS Lambda** reads the DevOps Agent webhook URL and token from **AWS Secrets Manager**, then posts the incident. It does not investigate.',
   '**AWS Lambda** posts the incident to the **AWS DevOps Agent**, which runs the full autonomous investigation: it queries **Amazon Managed Service for Prometheus** (via a Model Context Protocol server on **Amazon API Gateway**, secured by **Amazon Cognito**) and inspects **Amazon EKS** to pinpoint the failed network function.',
   'Engineers run the guided demo and interactive analysis from an **Amazon SageMaker** notebook.',
 ];
@@ -130,12 +130,12 @@ svc(7.85,5.55,'AWSDevOpsAgent','AWS DevOps Agent\nautonomous investigation',9);
 cnum(7.17,5.49,7);
 
 // ── arrows (marker-end points at the target) ──
-arrow(3.54,2.60,4.42,2.60,GREEN,'aG');    // 2: EKS -> AMP
-arrow(5.60,2.60,7.28,2.60,GRAY,'aGray');  // 4: AMP -> SNS
-arrow(7.85,2.98,7.85,4.02,PURPLE,'aP');   // 5: SNS -> Lambda
-arrow(5.30,4.60,7.28,4.60,RED,'aR');      // 7: Secrets Manager -> Lambda
-arrow(7.85,4.68,7.85,5.55,PURPLE,'aP');   // 8: Lambda -> DevOps Agent
-arrow(7.85,5.95,6.46,5.95,PURPLE,'aP');   // DevOps Agent -> MCP (query)
+arrow(3.54,2.60,4.42,2.60,'#000000','aK');    // 2: EKS -> AMP
+arrow(5.60,2.60,7.28,2.60,'#000000','aK');  // 4: AMP -> SNS
+arrow(7.85,2.98,7.85,4.02,'#000000','aK');   // 5: SNS -> Lambda
+arrow(5.30,4.60,7.28,4.60,'#000000','aK');      // 7: Secrets Manager -> Lambda
+arrow(7.85,4.68,7.85,5.55,'#000000','aK');   // 8: Lambda -> DevOps Agent
+arrow(7.85,5.95,6.46,5.95,'#000000','aK');   // DevOps Agent -> MCP (query)
 
 // ── footer ──
 S.push(`<text x="${x(0.12)}" y="${x(7.34)}" font-family="${FF}" font-size="9" fill="${GRAY}">© 2026, Amazon Web Services, Inc. or its affiliates. All rights reserved.</text>`);
