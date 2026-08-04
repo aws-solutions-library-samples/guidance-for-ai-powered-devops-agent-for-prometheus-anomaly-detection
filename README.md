@@ -207,6 +207,12 @@ cd cdk && cdk destroy --all
 
 Customers are responsible for making their own independent assessment of the information in this Guidance. This Guidance: (a) is for informational purposes only, (b) represents AWS current product offerings and practices, which are subject to change without notice, and (c) does not create any commitments or assurances from AWS and its affiliates, suppliers, or licensors. AWS products or services are provided "as is" without warranties, representations, or conditions of any kind, whether express or implied. AWS responsibilities and liabilities to its customers are controlled by AWS agreements, and this Guidance is not part of, nor does it modify, any agreement between AWS and its customers.
 
+### License and third-party components
+
+The code in this repository is licensed under the [MIT-0 License](LICENSE).
+
+This Guidance **deploys** third-party open source software to demonstrate the pattern — notably **Open5GS** and **UERANSIM** (both **AGPL-3.0**, UERANSIM also offering a commercial license) and **MongoDB Community** (**SSPL**). That software is pulled as container images at deployment time and is neither redistributed nor linked by this repository. Review [`NOTICE.md`](NOTICE.md) for the full attribution list and licensing notes before any production or commercial use. The anomaly-detection and DevOps Agent pattern itself is not tied to these components — it works with any Prometheus-compatible metric source.
+
 ## Authors
 
 - Mohamed Sherif
