@@ -1,6 +1,6 @@
 digraph amp {
   rankdir=LR; bgcolor="white"; pad=0.3; nodesep=0.4; ranksep=0.9;
-  graph [fontname="Helvetica", label=<<B>AI-Powered DevOps Agent for Prometheus — open5gs + Amazon Managed Prometheus</B><BR/><FONT POINT-SIZE="11" COLOR="#5b6b7a">register-only capability provider · no Agent Space created</FONT>>, labelloc=t];
+  graph [fontname="Helvetica", label=<<B>AI-Powered DevOps Agent for Prometheus — open5gs + Amazon Managed Prometheus</B><BR/><FONT POINT-SIZE="11" COLOR="#5b6b7a">RCF anomaly → SNS → forwarder Lambda → DevOps Agent webhook (agent performs the investigation)</FONT>>, labelloc=t];
   node [fontname="Helvetica", fontsize=11, shape=box, style="rounded,filled", penwidth=1.3, margin="0.14,0.09"];
   edge [fontname="Helvetica", fontsize=9, color="#5b6b7a"];
 
@@ -32,7 +32,7 @@ digraph amp {
 
   // ── Alert-forwarding pipeline: RCF alert → SNS → forwarder Lambda → DevOps Agent webhook ──
   subgraph cluster_rca {
-    label=<<B>Automated RCA pipeline (CDK · scenario 2b)</B>>; style="rounded,filled"; fillcolor="#fdecf4"; color="#b0327a";
+    label=<<B>Alert forwarding pipeline (CDK)</B>>; style="rounded,filled"; fillcolor="#fdecf4"; color="#b0327a";
     rcf [label=<RCF anomaly detector<BR/><FONT POINT-SIZE="9">score on sum(registeredsubnbr) &gt; 0.1</FONT>>, fillcolor="#f6d9ea"];
     almgr [label=<Alertmanager → SNS<BR/><FONT POINT-SIZE="9">RCF5GRegistrationDrop</FONT>>, fillcolor="#f6d9ea"];
     rca [label=<Forwarder Lambda (open5gs-rcf-agent-forwarder)<BR/><FONT POINT-SIZE="9">posts incident to agent webhook</FONT>>, fillcolor="#f6d9ea"];
@@ -40,6 +40,5 @@ digraph amp {
     rcf -> almgr [label="alert"]; almgr -> rca [label="SNS"]; sm -> rca [style=dashed, label="webhook creds"];
   }
   amp -> rcf [label="evaluate (30s)", color="#b0327a"];
-  rca -> amp [label="PromQL (per-AMF)", color="#d9822b"];
   rca -> agent [label="POST incident (webhook)", color="#b0327a", penwidth=1.6];
 }
