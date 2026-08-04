@@ -1,44 +1,65 @@
+// Architecture diagram — laid out TOP-TO-BOTTOM on purpose.
+// A left-to-right chain produced a ~6.8:1 image, so when the notebook/README scaled it
+// to page width the text became unreadable. TB + rank=same rows keeps the aspect ratio
+// near square, so the type stays legible. Regenerate with docs/diagrams/regenerate.sh.
 digraph amp {
-  rankdir=LR; bgcolor="white"; pad=0.3; nodesep=0.4; ranksep=0.9;
-  graph [fontname="Helvetica", label=<<B>AI-Powered DevOps Agent for Prometheus — open5gs + Amazon Managed Prometheus</B><BR/><FONT POINT-SIZE="11" COLOR="#5b6b7a">RCF anomaly → SNS → forwarder Lambda → DevOps Agent webhook (agent performs the investigation)</FONT>>, labelloc=t];
-  node [fontname="Helvetica", fontsize=11, shape=box, style="rounded,filled", penwidth=1.3, margin="0.14,0.09"];
-  edge [fontname="Helvetica", fontsize=9, color="#5b6b7a"];
+  rankdir=TB; bgcolor="white"; pad=0.35; nodesep=0.45; ranksep=0.75; compound=true;
+  graph [fontname="Helvetica", fontsize=13,
+         label=<<B>AI-Powered DevOps Agent for Prometheus — open5gs + Amazon Managed Prometheus</B><BR/><FONT POINT-SIZE="11" COLOR="#5b6b7a">RCF anomaly → SNS → forwarder Lambda → DevOps Agent webhook (the agent performs the investigation)</FONT>>,
+         labelloc=t];
+  node [fontname="Helvetica", fontsize=14, shape=box, style="rounded,filled", penwidth=1.4, margin="0.16,0.10"];
+  edge [fontname="Helvetica", fontsize=11, color="#5b6b7a"];
 
+  // ── 1. Workload on Amazon EKS ──
   subgraph cluster_eks {
-    label=<<B>Amazon EKS · open5gs-amp-cluster</B>>; style="rounded,filled"; fillcolor="#eef5fb"; color="#2b86c5";
-    core [label=<open5gs 5G core+RAN<BR/><FONT POINT-SIZE="9">AMF·SMF·UPF·… + gNB/UEs</FONT>>, fillcolor="#d6efe0"];
-    promagent [label=<Prometheus agent / ADOT<BR/><FONT POINT-SIZE="9">scrape /metrics · remote_write (SigV4, IRSA)</FONT>>, fillcolor="#d6e7f5"];
+    label=<<B>Amazon EKS · open5gs-amp-cluster</B>>; style="rounded,filled"; fillcolor="#eef5fb"; color="#2b86c5"; fontsize=12;
+    { rank=same;
+      core [label=<open5gs 5G core + RAN<BR/><FONT POINT-SIZE="11">AMF·SMF·UPF · gNB/UEs</FONT>>, fillcolor="#d6efe0"];
+      promagent [label=<Prometheus agent (ADOT)<BR/><FONT POINT-SIZE="11">scrape · IRSA</FONT>>, fillcolor="#d6e7f5"];
+    }
     core -> promagent [label="scrape"];
   }
 
-  amp [label=<Amazon Managed Prometheus<BR/><FONT POINT-SIZE="9">AMP workspace (CDK) · PromQL</FONT>>, shape=cylinder, fillcolor="#ffe8cc", color="#d9822b"];
-  promagent -> amp [label="remote_write\n(SigV4)", color="#d9822b", penwidth=1.6];
+  // ── 2. Metric store ──
+  amp [label=<Amazon Managed Prometheus<BR/><FONT POINT-SIZE="11">AMP workspace · PromQL</FONT>>, shape=cylinder, fillcolor="#ffe8cc", color="#d9822b"];
+  promagent -> amp [label="remote_write", color="#d9822b", penwidth=1.8];
 
-  subgraph cluster_mcp {
-    label=<<B>Prometheus MCP (CDK · from aws-samples)</B>>; style="rounded,filled"; fillcolor="#fff8e6"; color="#b8902a";
-    cog [label=<Cognito<BR/><FONT POINT-SIZE="9">M2M OAuth2 client</FONT>>, fillcolor="#f6ebd2"];
-    apigw [label=<API Gateway<BR/><FONT POINT-SIZE="9">/mcp (JWT) · /health</FONT>>, fillcolor="#f6ebd2"];
-    lam [label=<Prometheus MCP Lambda<BR/><FONT POINT-SIZE="9">5 tools · aps:QueryMetrics…</FONT>>, fillcolor="#f6ebd2"];
-    apigw -> lam; cog -> apigw [style=dashed, label="JWT authz"];
-  }
-  lam -> amp [label="PromQL query", color="#d9822b"];
-
-  agent [label=<AWS DevOps Agent<BR/><FONT POINT-SIZE="9">capability provider (OAuth2)</FONT>>, fillcolor="#e9e0ff", color="#7a5fb0"];
-  agent -> cog [label="1 · OAuth2 token", color="#7a5fb0"];
-  agent -> apigw [label="2 · MCP + JWT", color="#7a5fb0", penwidth=1.6];
-
-  conncdk [label=<agent-connectivity (CDK)<BR/><FONT POINT-SIZE="9">register-service · NO create-agent-space</FONT>>, shape=note, fillcolor="#fdecec", color="#c0392b"];
-  conncdk -> agent [style=dotted, label="registers MCP", color="#c0392b"];
-
-  // ── Alert-forwarding pipeline: RCF alert → SNS → forwarder Lambda → DevOps Agent webhook ──
-  subgraph cluster_rca {
-    label=<<B>Alert forwarding pipeline (CDK)</B>>; style="rounded,filled"; fillcolor="#fdecf4"; color="#b0327a";
-    rcf [label=<RCF anomaly detector<BR/><FONT POINT-SIZE="9">score on sum(registeredsubnbr) &gt; 0.1</FONT>>, fillcolor="#f6d9ea"];
-    almgr [label=<Alertmanager → SNS<BR/><FONT POINT-SIZE="9">RCF5GRegistrationDrop</FONT>>, fillcolor="#f6d9ea"];
-    rca [label=<Forwarder Lambda (open5gs-rcf-agent-forwarder)<BR/><FONT POINT-SIZE="9">posts incident to agent webhook</FONT>>, fillcolor="#f6d9ea"];
-    sm [label=<Secrets Manager<BR/><FONT POINT-SIZE="9">agent webhook url + token</FONT>>, shape=note, fillcolor="#f6ebd2"];
-    rcf -> almgr [label="alert"]; almgr -> rca [label="SNS"]; sm -> rca [style=dashed, label="webhook creds"];
+  // ── 3. Alert-forwarding pipeline: RCF → Alertmanager/SNS → forwarder Lambda ──
+  subgraph cluster_fwd {
+    label=<<B>Alert forwarding pipeline (CDK)</B>>; style="rounded,filled"; fillcolor="#fdecf4"; color="#b0327a"; fontsize=12;
+    { rank=same;
+      rcf [label=<RCF anomaly detector<BR/><FONT POINT-SIZE="11">score &gt; 0.1 · 30s</FONT>>, fillcolor="#f6d9ea"];
+      almgr [label=<Alertmanager → SNS<BR/><FONT POINT-SIZE="11">RCF5GRegistrationDrop</FONT>>, fillcolor="#f6d9ea"];
+    }
+    { rank=same;
+      fwd [label=<Forwarder Lambda<BR/><FONT POINT-SIZE="11">posts incident only</FONT>>, fillcolor="#f6d9ea"];
+      sm [label=<Secrets Manager<BR/><FONT POINT-SIZE="11">webhook url + token</FONT>>, shape=note, fillcolor="#f6ebd2"];
+    }
+    rcf -> almgr [label="alert"];
+    almgr -> fwd [label="SNS"];
+    sm -> fwd [style=dashed, label="webhook creds"];
   }
   amp -> rcf [label="evaluate (30s)", color="#b0327a"];
-  rca -> agent [label="POST incident (webhook)", color="#b0327a", penwidth=1.6];
+
+  // ── 4. The agent (does the investigation) ──
+  agent [label=<AWS DevOps Agent<BR/><FONT POINT-SIZE="11">autonomous investigation</FONT>>, fillcolor="#e9e0ff", color="#7a5fb0"];
+  fwd -> agent [label="POST incident (webhook)", color="#b0327a", penwidth=1.8];
+  conncdk [label=<agent-connectivity (CDK)<BR/><FONT POINT-SIZE="11">register-service</FONT>>, shape=note, fillcolor="#fdecec", color="#c0392b"];
+  { rank=same; agent; conncdk; }
+  conncdk -> agent [style=dotted, label="registers MCP", color="#c0392b", constraint=false];
+
+  // ── 5. How the agent reads metrics: OAuth2-secured MCP ──
+  subgraph cluster_mcp {
+    label=<<B>Prometheus MCP (CDK · from aws-samples)</B>>; style="rounded,filled"; fillcolor="#fff8e6"; color="#b8902a"; fontsize=12;
+    { rank=same;
+      cog [label=<Cognito<BR/><FONT POINT-SIZE="11">M2M OAuth2</FONT>>, fillcolor="#f6ebd2"];
+      apigw [label=<API Gateway<BR/><FONT POINT-SIZE="11">/mcp (JWT)</FONT>>, fillcolor="#f6ebd2"];
+      lam [label=<MCP Lambda<BR/><FONT POINT-SIZE="11">5 tools</FONT>>, fillcolor="#f6ebd2"];
+    }
+    cog -> apigw [style=dashed, label="JWT authz"];
+    apigw -> lam;
+  }
+  agent -> cog [label="1 · OAuth2 token", color="#7a5fb0"];
+  agent -> apigw [label="2 · MCP + JWT", color="#7a5fb0", penwidth=1.8];
+  lam -> amp [label="PromQL query", color="#d9822b", constraint=false];
 }

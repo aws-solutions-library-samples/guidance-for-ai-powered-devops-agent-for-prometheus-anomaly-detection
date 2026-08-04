@@ -324,8 +324,8 @@ itself. The **AWS DevOps Agent has already started the full autonomous investiga
 and inspects the cluster to identify the failing network function. Open your **Agent Space → Incidents** in the
 DevOps Agent web app to watch its timeline and root-cause finding.
 
-The cell below (1) confirms the webhook is still wired, then (2) prints the same signals the agent correlates,
-so you can compare its conclusion against ground truth.""")
+The cell below simply confirms the webhook is still wired — the investigation itself happens in the
+DevOps Agent, not here.""")
 
 code('''# Confirm the pipeline is armed (the webhook the forwarder Lambda POSTs to when RCF fires)
 import boto3, json as _json
@@ -340,37 +340,6 @@ try:
         print("Webhook NOT set - re-run the Step 2 wiring cell (until then the Lambda only logs the alert to CloudWatch).")
 except Exception as e:
     print("Could not read webhook secret: " + str(e)[:120])''')
-
-code('''print('\u2550\u2550\u2550 SIGNALS THE AGENT CORRELATES \u2550\u2550\u2550\\n')
-print('1. Per-AMF breakdown (blast radius):')
-for r in sorted(query_amp('fivegs_amffunction_rm_registeredsubnbr'), key=lambda x: x['metric'].get('pod','')):
-    pod = r['metric'].get('pod', ''); v = int(r['value'][1])
-    print(f'   {pod}: {v} registered', '\u2190 AFFECTED (TAC=1)' if v == 0 else '\u2190 healthy')
-print()
-print('2. AMF1 restart count \u2014 last 12 min (range):')
-series = query_amp_range('max(kube_pod_container_status_restarts_total{namespace="open5gs", pod=~"amf1.*"})', minutes=12, step='60s')
-if series:
-    pts = series[0]['values']
-    first = int(float(pts[0][1])); last = int(float(pts[-1][1]))
-    print(f'   restarts: {first} \u2192 {last}', '\u2190 CRASH LOOP!' if last > first else '')
-    # show the moment restarts began
-    prev = None
-    for ts, val in pts:
-        v = int(float(val))
-        if prev is not None and v > prev:
-            t = datetime.fromtimestamp(float(ts), timezone.utc).strftime('%H:%M:%S')
-            print(f'     {t} UTC: restarts climbed to {v}')
-        prev = v
-print()
-print('3. AMF1 last-terminated reason:')
-ok, out, _ = run_kubectl(['get', 'pod', '-n', 'open5gs', '-l', 'app=amf1', '-o',
-    'jsonpath={.items[0].status.containerStatuses[0].lastState.terminated.reason}: exit {.items[0].status.containerStatuses[0].lastState.terminated.exitCode}'], timeout=15)
-print(f'   {out.strip() or "(pod healthy / no recent termination)"}')
-print()
-print('\u2550\u2550\u2550 GROUND TRUTH (compare with the agent finding) \u2550\u2550\u2550')
-print('Root cause : AMF1 in CrashLoopBackOff after a config change (missing time.t3512, exit 255).')
-print('Impact     : ~500 users on TAC=1 lost registration. AMF2 (TAC=2) healthy \u2014 blast radius isolated.')
-print('Remediation: Roll back the amf1-config ConfigMap (Step 5).')''')
 
 # ---- Step 6: recovery ----
 md("""## Step 6: Recovery
@@ -456,7 +425,7 @@ md("""---
 ### Key Takeaways
 1. **RCF detects onset instantly** \u2014 a 50% subscriber drop spikes the score to ~1.0 within one 30s cycle.
 2. **Capture the spike with a range query** \u2014 the score returns to 0 as the model adapts, so an instant query misses it. Always query the score over a time range (in **UTC**).
-3. **The DevOps Agent pinpoints root cause automatically** \u2014 AMF1 restart count climbs at the same timestamp as the drop; the per-AMF breakdown shows the blast radius (TAC=1 only).
+3. **The DevOps Agent pinpoints root cause automatically** \u2014 the alert reaches it within seconds of the drop, and it correlates the per-AMF registration and pod restarts itself to isolate the blast radius (TAC=1 only). No human, and no correlation logic in this notebook or the Lambda.
 4. **Data-plane throughput** uses `container_network_*_bytes_total` (the open5gs `fivegs_ep_n3_gtp_*` counters are not wired in 2.6.6).
 5. **Fast, isolated recovery** \u2014 fix config, restart, UEs auto-re-register; AMF2 never affected.""")
 

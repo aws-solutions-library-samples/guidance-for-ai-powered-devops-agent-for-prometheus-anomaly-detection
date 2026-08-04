@@ -24,7 +24,7 @@ echo "── Graphviz sources → svg + png ──"
 for d in architecture fault-scenario; do
   [ -f "$d.dot" ] || continue
   "$DOT" -Tsvg "$d.dot" -o "$d.svg"
-  "$DOT" -Tpng -Gdpi=140 "$d.dot" -o "$d.png"
+  "$DOT" -Tpng -Gdpi=200 "$d.dot" -o "$d.png"
   echo "   $d.svg + $d.png"
 done
 
