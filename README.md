@@ -39,13 +39,13 @@ A real [open5gs](https://open5gs.org/) 5G core (2 AMFs, 1 SMF, 4 UPFs, and suppo
 
 ### How it works
 
-1. open5gs 5G core network functions on Amazon EKS expose Prometheus metrics on port 9090.
-2. kube-prometheus-stack scrapes them and remote-writes to AMP over SigV4 (via an IRSA service account).
+1. **Amazon EKS** hosts the open5gs 5G core network functions and the UERANSIM RAN (100 gNodeBs, 1,000 UEs), which expose Prometheus metrics on port 9090.
+2. A **Prometheus agent** (kube-prometheus-stack) scrapes them and remote-writes to AMP over SigV4, via an IRSA service account.
 3. An AMP **RCF anomaly detector** scores `sum(fivegs_amffunction_rm_registeredsubnbr)` every 30 seconds.
-4. When the score crosses `0.1`, the `RCF5GRegistrationDrop` alert rule fires.
-5. AMP **Alertmanager** routes the alert to an Amazon **SNS** topic (`open5gs-rcf-alert-trigger`).
-6. The **forwarder Lambda** (`open5gs-rcf-agent-forwarder`) reads the DevOps Agent webhook URL/token from **AWS Secrets Manager** at runtime and **POSTs the incident to the webhook** (HMAC or API-key auth). It does not query metrics or derive root cause.
-7. The **AWS DevOps Agent** performs the **entire autonomous investigation** — querying AMP through the OAuth2-secured **Prometheus MCP** (API Gateway + Amazon Cognito + Lambda) registered as a capability provider, and inspecting the EKS workload — to pinpoint the failing network function.
+4. When the score crosses `0.1`, the `RCF5GRegistrationDrop` alert fires and AMP **Alertmanager** publishes to the **Amazon SNS** topic `open5gs-rcf-alert-trigger`.
+5. **Amazon SNS** invokes the forwarder **AWS Lambda** function (`open5gs-rcf-agent-forwarder`).
+6. The Lambda reads the DevOps Agent webhook URL and token from **AWS Secrets Manager** at runtime and **POSTs the incident** (HMAC or API-key auth). It does not query metrics or derive root cause.
+7. The **AWS DevOps Agent** performs the **entire autonomous investigation** — querying AMP through the OAuth2-secured **Prometheus MCP** (API Gateway + Amazon Cognito + Lambda) and inspecting the EKS workload — to pinpoint the failing network function.
 8. An **Amazon SageMaker** notebook drives the end-to-end demo: baseline → wire the agent → inject the fault → observe the anomaly → watch the automated investigation → recover.
 
 ![RCF Data Flow](docs/diagrams/rcf-dataflow.svg)

@@ -39,7 +39,7 @@ function runs(s, base={}){
 // ── Title (24pt bold) + description (12pt black, <=35 words) above the separator ──
 slide.addText('Guidance for 5G Network Anomaly Detection and Automated Root Cause Analysis on AWS',
   { x:0.12, y:0.05, w:9.45, h:0.72, fontSize:24, bold:true, fontFace:F, color:DARK, valign:'top' });
-slide.addText('This architecture diagram shows how Amazon Managed Service for Prometheus detects anomalies in a live 5G core and automatically triggers the AWS DevOps Agent to investigate and identify the failing network function.',
+slide.addText('This architecture diagram shows how Amazon Managed Service for Prometheus detects 5G core anomalies and automatically triggers the AWS DevOps Agent to investigate and identify the failing network function.',
   { x:0.12, y:0.80, w:9.45, h:0.40, fontSize:12, fontFace:F, color:BLACK, valign:'top' });
 slide.addShape(S.line, { x:0.12, y:1.30, w:9.42, h:0, line:{ color:GRAY, width:2 } });
 
@@ -114,7 +114,7 @@ cnum(0.40, 2.30, 1);
 
 // ── 2/3. Amazon Managed Service for Prometheus + RCF detector ──
 svc(4.70, 2.30, 'AmazonManagedServiceforPrometheus', 'Amazon Managed Service\nfor Prometheus', 2.4);
-box(3.95, 3.52, 1.95, 0.48, 'RCF anomaly detector \u00b7 score > 0.1', GREENBG, GREEN);
+box(3.95, 3.52, 1.95, 0.58, 'RCF anomaly detector\nscore > 0.1 \u00b7 every 30s', GREENBG, GREEN);
 cnum(4.02, 2.24, 2); cnum(5.24, 2.24, 3);
 
 // ── 4. Amazon SNS ──
@@ -138,10 +138,10 @@ svc(1.55, 5.55, 'AmazonSageMaker', 'Amazon SageMaker\ndemo notebook', 2.0);
 cnum(0.86, 5.58, 8);
 
 // ── Prometheus MCP (generic group: multiple services -> name centred at top) ──
-grpGeneric(3.60, 5.48, 3.30, 1.05, 'Prometheus MCP \u2014 on-demand metric queries', PURPLE);
-svc(4.25, 5.82, 'AmazonCognito', 'Amazon Cognito\nM2M OAuth2', 1.10);
-svc(5.35, 5.82, 'AmazonAPIGateway', 'Amazon API\nGateway', 1.05);
-svc(6.50, 5.82, 'AWSLambda', 'AWS Lambda\nMCP server', 1.10);
+grpGeneric(3.60, 5.35, 3.30, 1.45, 'Prometheus MCP \u2014 on-demand metric queries', PURPLE);
+svc(4.25, 5.62, 'AmazonCognito', 'Amazon Cognito\nM2M OAuth2', 1.10);
+svc(5.35, 5.62, 'AmazonAPIGateway', 'Amazon API\nGateway', 1.05);
+svc(6.50, 5.62, 'AWSLambda', 'AWS Lambda\nMCP server', 1.10);
 
 // ── Arrows: solid black, 1.25pt, straight / right-angle only ──
 seg(3.54, 2.60, 1.16, 0, 'end');     // 2: EKS -> AMP
