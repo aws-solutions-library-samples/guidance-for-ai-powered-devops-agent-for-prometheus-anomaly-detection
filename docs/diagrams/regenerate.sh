@@ -31,6 +31,8 @@ done
 echo "── AWS Guidance diagram (pptx + svg + png) ──"
 if command -v node >/dev/null; then
   node generate-guidance-pptx.cjs 5g-rcf-architecture-guidance.pptx >/dev/null
+  # Convert the separator to a real LINE connector so the AWS RA Validator can parse it
+  python3 fix-separator.py 5g-rcf-architecture-guidance.pptx
   node generate-guidance-svg.cjs  5g-rcf-architecture-guidance.svg  >/dev/null
   if command -v rsvg-convert >/dev/null; then
     rsvg-convert -w 2560 5g-rcf-architecture-guidance.svg -o 5g-rcf-architecture-guidance.png
