@@ -52,9 +52,12 @@ const steps=[
  'Engineers run the guided demo and interactive analysis from an **Amazon SageMaker** notebook.',
 ];
 function toks(s){ const o=[]; s.split('**').forEach((seg,i)=>{ const b=i%2===1; seg.split(/\s+/).forEach(w=>{ if(w) o.push({w,b}); }); }); return o; }
-const top=0.16, slot=(7.5-top-0.10)/steps.length, FS=12, LEAD=14, MAXC=44;
+const top=0.16, FS=12, LEAD=14, MAXC=44, LH=0.16;
+const hOf = t => Math.max(1, Math.ceil(t.replace(/\*\*/g,'').length / 44)) * LH;
+const GAP = Math.max(0.08, (7.5 - top - 0.22 - steps.reduce((a,t)=>a+hOf(t),0)) / (steps.length - 1));
+let cursor = top;
 steps.forEach((s,i)=>{
-  const cy=top+i*slot;
+  const cy=cursor; cursor += hOf(s) + GAP;
   S.push(`<circle cx="${P(sbX+0.23)}" cy="${P(cy+0.17)}" r="${P(0.15)}" fill="${DARK}"/>`);
   S.push(`<text x="${P(sbX+0.23)}" y="${P(cy+0.17)+4}" font-family="${FF}" font-size="12" font-weight="bold" fill="${WHITE}" text-anchor="middle">${i+1}</text>`);
   const tx=P(sbX+0.46); const lines=[]; let cur=[], len=0;
@@ -111,7 +114,7 @@ grpCustom(0.52,2.18,3.02,3.05,'Amazon EKS \u00b7 open5gs-amp-cluster',ORANGE,'Am
 box(0.64,2.62,2.78,0.48,'UERANSIM RAN \u2014 100 gNodeBs \u00b7 1,000 UEs',WHITE,GRAY);
 box(0.64,3.18,2.78,0.70,'open5gs 5G Core\nAMF \u00b7 SMF \u00b7 4x UPF \u00b7 NRF/UDM/PCF',WHITE,GRAY);
 box(0.64,3.96,2.78,0.62,'Prometheus agent (ADOT)\nscrape + remote_write (SigV4)',GREENBG,GREEN);
-cnum(0.40,2.30,1);
+cnum(0.29,1.98,1);
 
 svc(4.70,2.30,'AmazonManagedServiceforPrometheus','Amazon Managed Service\nfor Prometheus');
 box(3.95,3.52,1.95,0.58,'RCF anomaly detector\nscore > 0.1 \u00b7 every 30s',GREENBG,GREEN);
@@ -128,12 +131,12 @@ svc(4.25,5.62,'AmazonCognito','Amazon Cognito\nM2M OAuth2');
 svc(5.35,5.62,'AmazonAPIGateway','Amazon API\nGateway');
 svc(6.50,5.62,'AWSLambda','AWS Lambda\nMCP server');
 
-seg(3.54,2.60,1.16,0,'end');
+seg(3.54,2.60,0.78,0,'end');
 seg(5.90,2.60,1.35,0,'end');
-seg(7.85,2.95,0,1.05,'end');
-seg(6.60,4.60,0.95,0,'end');
-seg(7.85,4.66,0,0.89,'end');
-seg(6.90,5.95,0.95,0,'begin');
+seg(7.85,3.34,0,0.66,'end');
+seg(6.60,4.60,0.83,0,'end');
+seg(7.85,5.04,0,0.51,'end');
+seg(6.90,5.95,0.60,0,'begin');
 
 S.push(`<text x="${P(0.12)}" y="${P(7.38)}" font-family="${FF}" font-size="12" fill="${GRAY}">\u00a9 2026, Amazon Web Services, Inc. or its affiliates. All rights reserved.</text>`);
 

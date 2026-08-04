@@ -56,12 +56,21 @@ const steps = [
   '**AWS Lambda** posts the incident to the **AWS DevOps Agent**, which investigates autonomously: it queries **Amazon Managed Service for Prometheus** through a Model Context Protocol server on **Amazon API Gateway**, secured by **Amazon Cognito**.',
   'Engineers run the guided demo and interactive analysis from an **Amazon SageMaker** notebook.',
 ];
-const top=0.16, slot=(7.5-top-0.10)/steps.length;
+// Flow the steps proportionally to their rendered height so short steps don't leave
+// gaps and long ones don't collide (fixed slots required manual nudging).
+const top=0.16, CPL=44, LH=0.16;                    // chars/line at 9pt in 2.96", line height
+const hOf = t => Math.max(1, Math.ceil(t.replace(/\*\*/g,'').length / CPL)) * LH;
+// Height-proportional blocks, with the leftover space shared evenly between them so the
+// steps fill the sidebar top-to-bottom (fixed slots left gaps that needed manual nudging).
+const avail = 7.5 - top - 0.22;
+const contentH = steps.reduce((a,t)=>a+hOf(t),0);
+const GAP = Math.max(0.08, (avail - contentH) / (steps.length - 1));
+let cursor = top;
 steps.forEach((s,i)=>{
-  const y=top+i*slot;
+  const y=cursor, hh=hOf(s); cursor += hh + GAP;
   slide.addText(String(i+1), { x:sbX+0.08, y:y+0.02, w:0.3, h:0.3, fontSize:9, bold:true, fontFace:F,
     color:WHITE, fill:{color:DARK}, align:'center', valign:'middle', shape:S.ellipse });
-  slide.addText(runs(s), { x:sbX+0.46, y, w:sbW-0.56, h:slot-0.04, fontSize:9, fontFace:F, color:BLACK, valign:'top' });
+  slide.addText(runs(s), { x:sbX+0.46, y, w:sbW-0.56, h:hh, fontSize:9, fontFace:F, color:BLACK, valign:'top' });
 });
 
 // ── helpers ──
@@ -110,7 +119,7 @@ grpCustom(0.52, 2.18, 3.02, 3.05, 'Amazon EKS \u00b7 open5gs-amp-cluster', ORANG
 box(0.64, 2.62, 2.78, 0.48, 'UERANSIM RAN \u2014 100 gNodeBs \u00b7 1,000 UEs', WHITE, GRAY);
 box(0.64, 3.18, 2.78, 0.70, 'open5gs 5G Core\nAMF \u00b7 SMF \u00b7 4x UPF \u00b7 NRF/UDM/PCF', WHITE, GRAY);
 box(0.64, 3.96, 2.78, 0.62, 'Prometheus agent (ADOT)\nscrape + remote_write (SigV4)', GREENBG, GREEN);
-cnum(0.40, 2.30, 1);
+cnum(0.29, 1.98, 1);
 
 // ── 2/3. Amazon Managed Service for Prometheus + RCF detector ──
 svc(4.70, 2.30, 'AmazonManagedServiceforPrometheus', 'Amazon Managed Service\nfor Prometheus', 2.4);
@@ -144,12 +153,12 @@ svc(5.35, 5.62, 'AmazonAPIGateway', 'Amazon API\nGateway', 1.05);
 svc(6.50, 5.62, 'AWSLambda', 'AWS Lambda\nMCP server', 1.10);
 
 // ── Arrows: solid black, 1.25pt, straight / right-angle only ──
-seg(3.54, 2.60, 1.16, 0, 'end');     // 2: EKS -> AMP
+seg(3.54, 2.60, 0.78, 0, 'end');     // 2: EKS -> AMP
 seg(5.90, 2.60, 1.35, 0, 'end');     // 4: AMP -> SNS
-seg(7.85, 2.95, 0, 1.05, 'end');     // 5: SNS -> Lambda
-seg(6.60, 4.60, 0.95, 0, 'end');     // 6: Secrets Manager -> Lambda
-seg(7.85, 4.66, 0, 0.89, 'end');     // 7: Lambda -> DevOps Agent
-seg(6.90, 5.95, 0.95, 0, 'begin');   // DevOps Agent -> MCP (queries)
+seg(7.85, 3.34, 0, 0.66, 'end');     // 5: SNS -> Lambda
+seg(6.60, 4.60, 0.83, 0, 'end');     // 6: Secrets Manager -> Lambda
+seg(7.85, 5.04, 0, 0.51, 'end');     // 7: Lambda -> DevOps Agent
+seg(6.90, 5.95, 0.60, 0, 'begin');   // DevOps Agent -> MCP (queries)
 
 // ── Footer (fixed element) ──
 slide.addText('\u00a9 2026, Amazon Web Services, Inc. or its affiliates. All rights reserved.',
