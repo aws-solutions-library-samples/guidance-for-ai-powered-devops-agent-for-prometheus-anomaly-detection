@@ -186,7 +186,7 @@ So the anomaly **automatically launches an AI investigation**, wire the DevOps A
    - **API key** — sent as `Authorization: Bearer <secret>`.
    Copy the **webhook URL** and the **secret** (the secret is shown only once).
 
-Paste those two values into the next cell, set the matching auth type, then run the **wiring cell**. The forwarder Lambda (`open5gs-rcf-rca`) reads them from Secrets Manager **at runtime**, so the instant RCF fires it POSTs the incident and the agent starts investigating — no redeploy needed.""")
+Paste those two values into the next cell, set the matching auth type, then run the **wiring cell**. The forwarder Lambda (`open5gs-rcf-agent-forwarder`) reads them from Secrets Manager **at runtime**, so the instant RCF fires it POSTs the incident and the agent starts investigating — no redeploy needed.""")
 
 code('''# \u2500\u2500\u2500 PASTE your DevOps Agent webhook details here \u2500\u2500\u2500
 DEVOPS_AGENT_WEBHOOK_URL    = "PASTE_YOUR_WEBHOOK_URL_HERE"
@@ -208,7 +208,7 @@ else:
                                   "token": DEVOPS_AGENT_WEBHOOK_SECRET,
                                   "auth": DEVOPS_AGENT_AUTH}))
     print(f"\u2713 Webhook wired into Secrets Manager ({_SECRET_ID}), auth={DEVOPS_AGENT_AUTH}.")
-    print("  Pipeline armed:  RCF fires \u2192 SNS \u2192 open5gs-rcf-rca Lambda \u2192 POST to your webhook \u2192 DevOps Agent investigates.")''')
+    print("  Pipeline armed:  RCF fires \u2192 SNS \u2192 open5gs-rcf-agent-forwarder Lambda \u2192 POST to your webhook \u2192 DevOps Agent investigates.")''')
 
 # ---- Step 3: fault ----
 md("""## Step 3: Inject Fault (Bad Config Push to AMF1)
@@ -317,7 +317,7 @@ md("""## Step 5: The AWS DevOps Agent Investigates (Automated RCA)
 This is the payoff. The moment the RCF score crossed the threshold in Step 4, the `RCF5GRegistrationDrop`
 alert fired and the pipeline ran **with no human in the loop**:
 
-`RCF alert → AMP Alertmanager → SNS (open5gs-rcf-rca-trigger) → forwarder Lambda (open5gs-rcf-rca) → your DevOps Agent webhook`
+`RCF alert → AMP Alertmanager → SNS (open5gs-rcf-alert-trigger) → forwarder Lambda (open5gs-rcf-agent-forwarder) → your DevOps Agent webhook`
 
 The forwarder Lambda posted the incident to the webhook you wired in **Step 2** — it does **not** investigate
 itself. The **AWS DevOps Agent has already started the full autonomous investigation**: it queries the metrics

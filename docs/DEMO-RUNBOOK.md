@@ -76,13 +76,13 @@ So the anomaly **automatically launches an investigation**, wire the agent first
 ### 4. Watch the automated DevOps Agent investigation
 The fault crosses the RCF threshold and the pipeline runs with **no human in the loop**:
 ```
-RCF5GRegistrationDrop (score > 0.1) → AMP Alertmanager → SNS (open5gs-rcf-rca-trigger)
-  → forwarder Lambda (open5gs-rcf-rca) → your DevOps Agent webhook → autonomous investigation
+RCF5GRegistrationDrop (score > 0.1) → AMP Alertmanager → SNS (open5gs-rcf-alert-trigger)
+  → forwarder Lambda (open5gs-rcf-agent-forwarder) → your DevOps Agent webhook → autonomous investigation
 ```
 ```bash
 kubectl get pods -n open5gs -l app=amf1 -w     # AMF1 → CrashLoopBackOff
 # Confirm the Lambda forwarded the incident (look for "Agent webhook status: 2xx"):
-#   aws logs filter-log-events --log-group-name /aws/lambda/open5gs-rcf-rca --start-time <epoch-ms>
+#   aws logs filter-log-events --log-group-name /aws/lambda/open5gs-rcf-agent-forwarder --start-time <epoch-ms>
 ```
 Then open **DevOps Agent Space → Incidents** — the agent has started investigating and will surface the
 root cause (AMF1 CrashLoopBackOff, missing `time.t3512`). If the webhook isn't wired, the Lambda just

@@ -17,7 +17,7 @@ export AWS_PROFILE
 REGION="${AWS_REGION:-us-east-1}"
 STACK="${STACK:-Open5gsAmpStack}"
 SECRET_ID="open5gs/devops-agent/webhook"
-LAMBDA="open5gs-rcf-rca"
+LAMBDA="open5gs-rcf-agent-forwarder"
 
 # Fail early if the secret isn't there yet.
 aws secretsmanager describe-secret --secret-id "$SECRET_ID" --region "$REGION" >/dev/null 2>&1 \
@@ -25,7 +25,7 @@ aws secretsmanager describe-secret --secret-id "$SECRET_ID" --region "$REGION" >
 
 # Resolve the RCA SNS topic (for the optional test) from the stack outputs.
 TOPIC=$(aws cloudformation describe-stacks --stack-name "$STACK" --region "$REGION" \
-  --query "Stacks[0].Outputs[?OutputKey=='RcaTopicArn'].OutputValue" --output text 2>/dev/null || true)
+  --query "Stacks[0].Outputs[?OutputKey=='AlertTopicArn'].OutputValue" --output text 2>/dev/null || true)
 
 # Collect values — token hidden, nothing enters shell history.
 read -rp  "DevOps Agent webhook URL:   " URL
@@ -43,7 +43,7 @@ echo "✓ Secret '$SECRET_ID' updated (Lambda picks it up on the next alert; no 
 # Optional: fire a synthetic alert through the real pipeline and check the POST result.
 read -rp "Run a test alert through the pipeline now? [y/N] " YN
 if [[ "${YN:-N}" =~ ^[Yy]$ ]]; then
-  if [[ -z "$TOPIC" ]]; then echo "Could not resolve RcaTopicArn from stack outputs; skipping test."; exit 0; fi
+  if [[ -z "$TOPIC" ]]; then echo "Could not resolve AlertTopicArn from stack outputs; skipping test."; exit 0; fi
   aws sns publish --topic-arn "$TOPIC" --region "$REGION" \
     --subject "RCF 5G registration anomaly (test)" \
     --message '{"alertname":"RCF5GRegistrationDrop","status":"firing","alias":"5g-registered-subscribers"}' \

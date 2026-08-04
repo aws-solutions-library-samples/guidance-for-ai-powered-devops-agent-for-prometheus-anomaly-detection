@@ -35,7 +35,7 @@ digraph amp {
     label=<<B>Automated RCA pipeline (CDK · scenario 2b)</B>>; style="rounded,filled"; fillcolor="#fdecf4"; color="#b0327a";
     rcf [label=<RCF anomaly detector<BR/><FONT POINT-SIZE="9">score on sum(registeredsubnbr) &gt; 0.1</FONT>>, fillcolor="#f6d9ea"];
     almgr [label=<Alertmanager → SNS<BR/><FONT POINT-SIZE="9">RCF5GRegistrationDrop</FONT>>, fillcolor="#f6d9ea"];
-    rca [label=<Forwarder Lambda (open5gs-rcf-rca)<BR/><FONT POINT-SIZE="9">posts incident to agent webhook</FONT>>, fillcolor="#f6d9ea"];
+    rca [label=<Forwarder Lambda (open5gs-rcf-agent-forwarder)<BR/><FONT POINT-SIZE="9">posts incident to agent webhook</FONT>>, fillcolor="#f6d9ea"];
     sm [label=<Secrets Manager<BR/><FONT POINT-SIZE="9">agent webhook url + token</FONT>>, shape=note, fillcolor="#f6ebd2"];
     rcf -> almgr [label="alert"]; almgr -> rca [label="SNS"]; sm -> rca [style=dashed, label="webhook creds"];
   }

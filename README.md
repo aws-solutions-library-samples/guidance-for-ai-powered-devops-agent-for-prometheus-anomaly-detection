@@ -43,8 +43,8 @@ A real [open5gs](https://open5gs.org/) 5G core (2 AMFs, 1 SMF, 4 UPFs, and suppo
 2. kube-prometheus-stack scrapes them and remote-writes to AMP over SigV4 (via an IRSA service account).
 3. An AMP **RCF anomaly detector** scores `sum(fivegs_amffunction_rm_registeredsubnbr)` every 30 seconds.
 4. When the score crosses `0.1`, the `RCF5GRegistrationDrop` alert rule fires.
-5. AMP **Alertmanager** routes the alert to an Amazon **SNS** topic (`open5gs-rcf-rca-trigger`).
-6. The **forwarder Lambda** (`open5gs-rcf-rca`) reads the DevOps Agent webhook URL/token from **AWS Secrets Manager** at runtime and **POSTs the incident to the webhook** (HMAC or API-key auth). It does not query metrics or derive root cause.
+5. AMP **Alertmanager** routes the alert to an Amazon **SNS** topic (`open5gs-rcf-alert-trigger`).
+6. The **forwarder Lambda** (`open5gs-rcf-agent-forwarder`) reads the DevOps Agent webhook URL/token from **AWS Secrets Manager** at runtime and **POSTs the incident to the webhook** (HMAC or API-key auth). It does not query metrics or derive root cause.
 7. The **AWS DevOps Agent** performs the **entire autonomous investigation** — querying AMP through the OAuth2-secured **Prometheus MCP** (API Gateway + Amazon Cognito + Lambda) registered as a capability provider, and inspecting the EKS workload — to pinpoint the failing network function.
 8. An **Amazon SageMaker** notebook drives the end-to-end demo: baseline → wire the agent → inject the fault → observe the anomaly → watch the automated investigation → recover.
 
@@ -167,7 +167,7 @@ Open **SageMaker → Notebook Instances → `open5gs-rcf-anomaly-demo` → Open 
 ./manifests/fault-inject-amf1.sh break
 
 # The RCF alert fires -> the forwarder Lambda POSTs the incident to the DevOps Agent webhook. Watch the Lambda:
-#   aws logs filter-log-events --log-group-name /aws/lambda/open5gs-rcf-rca --start-time <epoch-ms>
+#   aws logs filter-log-events --log-group-name /aws/lambda/open5gs-rcf-agent-forwarder --start-time <epoch-ms>
 #   (look for "Agent webhook status: 2xx")
 
 # Fix it (restores config + restarts the TAC=1 gNBs to re-register)
