@@ -33,7 +33,9 @@ A real [open5gs](https://open5gs.org/) 5G core (2 AMFs, 1 SMF, 4 UPFs, and suppo
 
 ### Architecture
 
-![Architecture](docs/diagrams/architecture.svg)
+![Architecture](docs/diagrams/5g-rcf-architecture-guidance.png)
+
+> The editable source is [`docs/diagrams/5g-rcf-architecture-guidance.pptx`](docs/diagrams/5g-rcf-architecture-guidance.pptx) (AWS Guidance template format); a self-contained vector version is [`docs/diagrams/5g-rcf-architecture-guidance.svg`](docs/diagrams/5g-rcf-architecture-guidance.svg).
 
 ### How it works
 
