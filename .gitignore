@@ -4,3 +4,6 @@ cdk.out/
 dist/
 .DS_Store
 *.log
+
+# Microsoft Office lock/owner files (created while a doc is open)
+~$*
