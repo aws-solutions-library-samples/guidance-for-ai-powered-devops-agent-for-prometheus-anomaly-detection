@@ -36,7 +36,7 @@ function runs(s){
 // ── Title + description over the separator (left area only) ──
 slide.addText('Guidance for 5G Network Anomaly Detection and Automated Root Cause Analysis on AWS',
   { x:0.12, y:0.10, w:9.45, h:0.72, fontSize:20, bold:true, fontFace:F, color:DARK, valign:'top' });
-slide.addText('Amazon Managed Service for Prometheus applies Random Cut Forest anomaly detection to a live 5G core, then an automated root-cause-analysis pipeline identifies the failing network function and hands the incident to the AWS DevOps Agent for an autonomous investigation.',
+slide.addText('Amazon Managed Service for Prometheus applies Random Cut Forest anomaly detection to a live 5G core. When an anomaly fires, an AWS Lambda function forwards the alert to the AWS DevOps Agent, which autonomously investigates and identifies the failing network function.',
   { x:0.12, y:0.84, w:9.45, h:0.40, fontSize:10.5, fontFace:F, color:GRAY, valign:'top' });
 slide.addShape(S.line, { x:0.12, y:1.30, w:9.42, h:0, line:{ color:GRAY, width:2 } });
 
@@ -48,10 +48,9 @@ const steps = [
   'A Prometheus agent scrapes the metrics and remote-writes them to **Amazon Managed Service for Prometheus** using SigV4 signing and IAM Roles for Service Accounts.',
   '**Amazon Managed Service for Prometheus** runs a Random Cut Forest (RCF) anomaly detector on the registered-subscriber count, emitting an anomaly score every 30 seconds.',
   'When the score crosses the threshold, Alertmanager publishes to an **Amazon Simple Notification Service (Amazon SNS)** topic.',
-  '**Amazon SNS** invokes the root-cause-analysis **AWS Lambda** function.',
-  '**AWS Lambda** queries **Amazon Managed Service for Prometheus** for per-network-function registration and pod restarts to pinpoint the failed function.',
-  '**AWS Lambda** reads the DevOps Agent webhook URL and token from **AWS Secrets Manager**.',
-  '**AWS Lambda** posts an incident to the **AWS DevOps Agent**, which investigates autonomously and can query metrics through a Model Context Protocol server on **Amazon API Gateway**, secured by **Amazon Cognito**.',
+  '**Amazon SNS** invokes the forwarder **AWS Lambda** function.',
+  '**AWS Lambda** reads the DevOps Agent webhook URL and token from **AWS Secrets Manager** and posts the incident (it does not investigate).',
+  '**AWS Lambda** posts the incident to the **AWS DevOps Agent**, which runs the full autonomous investigation: it queries **Amazon Managed Service for Prometheus** (via a Model Context Protocol server on **Amazon API Gateway**, secured by **Amazon Cognito**) and inspects **Amazon EKS** to pinpoint the failed network function.',
   'Engineers run the guided demo and interactive analysis from an **Amazon SageMaker** notebook.',
 ];
 const top=0.16, slot=(7.5-top-0.1)/steps.length;
@@ -101,14 +100,14 @@ box(0.64, 3.16, 2.78, 0.72, 'open5gs 5G Core\nAMF · SMF · 4x UPF · NRF/UDM/PC
 box(0.64, 3.96, 2.78, 0.62, 'Prometheus agent (ADOT)\nscrape + remote_write (SigV4)', GREENBG, GREEN, 8);
 cnum(0.40, 2.30, 1);
 svc(1.55, 5.55, 'AmazonSageMaker', 'Amazon SageMaker\nDemo notebook', 8);
-cnum(0.86, 5.58, 9);
+cnum(0.86, 5.58, 8);
 
 // ── Column 2: AMP (+ RCF) , Secrets Manager , MCP group ──
 svc(4.70, 2.30, 'AmazonManagedServiceforPrometheus', 'Amazon Managed Service\nfor Prometheus', 8);
 box(3.95, 3.52, 1.95, 0.5, 'RCF anomaly detector\nscore > 0.1 · 30s', GREENBG, GREEN, 7.5);
 cnum(4.02, 2.24, 2); cnum(5.24, 2.24, 3);
 svc(4.70, 4.30, 'AWSSecretsManager', 'AWS Secrets Manager\nwebhook url + token', 8);
-cnum(4.02, 4.24, 7);
+cnum(4.02, 4.24, 6);
 grp(3.88, 5.48, 2.55, 1.05, 'Prometheus MCP (on-demand query)', PURPLE, false);
 svc(4.42, 5.78, 'AmazonCognito', 'Amazon\nCognito', 7);
 svc(5.20, 5.78, 'AmazonAPIGateway', 'Amazon API\nGateway', 7);
@@ -117,10 +116,10 @@ svc(5.98, 5.78, 'AWSLambda', 'AWS\nLambda', 7);
 // ── Column 3: SNS , Lambda (RCA) , DevOps Agent ──
 svc(7.85, 2.30, 'AmazonSimpleNotificationService', 'Amazon SNS\nRCA trigger topic', 8);
 cnum(7.17, 2.24, 4);
-svc(7.85, 4.00, 'AWSLambda', 'AWS Lambda\nRoot-cause analysis', 8);
-cnum(7.17, 3.94, 5); cnum(8.53, 3.94, 6);
+svc(7.85, 4.00, 'AWSLambda', 'AWS Lambda\nincident forwarder', 8);
+cnum(7.17, 3.94, 5);
 svc(7.85, 5.55, 'AWSDevOpsAgent', 'AWS DevOps Agent\nautonomous investigation', 8);
-cnum(7.17, 5.49, 8);
+cnum(7.17, 5.49, 7);
 
 // ── Arrows (straight / right-angle, open, 1.25pt) ──
 seg(3.54, 2.60, 1.16, 0, GREEN, 'end');     // 2: EKS -> AMP

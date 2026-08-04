@@ -55,7 +55,7 @@ So the anomaly **automatically launches an investigation**, wire the agent first
    ```
 3. **Generate a webhook** — Agent Space → Capabilities → Webhook → *Generate webhook*. Pick an auth type:
    **HMAC** (recommended — signed, verified via `x-amzn-event-signature`) or **API key** (`Authorization: Bearer`). Copy the URL + secret (shown once).
-4. **Wire it** so the RCA Lambda forwards incidents (secret is read at runtime — no redeploy):
+4. **Wire it** so the forwarder Lambda posts incidents to the agent (secret is read at runtime — no redeploy):
    ```bash
    ./deploy/70-wire-agent-webhook.sh        # prompts for URL + secret (hidden) + auth type
    ```
@@ -77,7 +77,7 @@ So the anomaly **automatically launches an investigation**, wire the agent first
 The fault crosses the RCF threshold and the pipeline runs with **no human in the loop**:
 ```
 RCF5GRegistrationDrop (score > 0.1) → AMP Alertmanager → SNS (open5gs-rcf-rca-trigger)
-  → RCA Lambda (open5gs-rcf-rca) → your DevOps Agent webhook → autonomous investigation
+  → forwarder Lambda (open5gs-rcf-rca) → your DevOps Agent webhook → autonomous investigation
 ```
 ```bash
 kubectl get pods -n open5gs -l app=amf1 -w     # AMF1 → CrashLoopBackOff
@@ -85,8 +85,8 @@ kubectl get pods -n open5gs -l app=amf1 -w     # AMF1 → CrashLoopBackOff
 #   aws logs filter-log-events --log-group-name /aws/lambda/open5gs-rcf-rca --start-time <epoch-ms>
 ```
 Then open **DevOps Agent Space → Incidents** — the agent has started investigating and will surface the
-root cause (AMF1 CrashLoopBackOff, missing `time.t3512`). If the webhook isn't wired, the Lambda still
-logs the RCA to CloudWatch.
+root cause (AMF1 CrashLoopBackOff, missing `time.t3512`). If the webhook isn't wired, the Lambda just
+logs the alert to CloudWatch and forwards nothing.
 
 ### 5. Recover
 ```bash

@@ -13,7 +13,7 @@ This notebook demonstrates **Amazon Managed Prometheus RCF anomaly detection** o
 
 **Scale**: `1000 UEs → 100 gNBs → 2 AMFs → SMF → 4 UPFs` (open5gs on EKS), 250 PDU sessions per UPF, continuous user-plane traffic.
 
-**Scenario**: A bad config push to AMF1 crashes it (CrashLoopBackOff), so **~500 of 1000 UEs** lose registration. RCF flags the drop within one 30s evaluation cycle, which **automatically triggers the AWS DevOps Agent** (RCF alert → Alertmanager → SNS → an RCA Lambda → the agent's webhook) to investigate and pinpoint root cause. We then recover.
+**Scenario**: A bad config push to AMF1 crashes it (CrashLoopBackOff), so **~500 of 1000 UEs** lose registration. RCF flags the drop within one 30s evaluation cycle, which **automatically triggers the AWS DevOps Agent** (RCF alert → Alertmanager → SNS → a forwarder Lambda → the agent's webhook). The **agent then investigates autonomously** and pinpoints root cause. We then recover.
 
 ---
 ## Architecture
@@ -186,7 +186,7 @@ So the anomaly **automatically launches an AI investigation**, wire the DevOps A
    - **API key** — sent as `Authorization: Bearer <secret>`.
    Copy the **webhook URL** and the **secret** (the secret is shown only once).
 
-Paste those two values into the next cell, set the matching auth type, then run the **wiring cell**. The RCA Lambda (`open5gs-rcf-rca`) reads them from Secrets Manager **at runtime**, so the instant RCF fires it POSTs the incident and the agent starts investigating — no redeploy needed.""")
+Paste those two values into the next cell, set the matching auth type, then run the **wiring cell**. The forwarder Lambda (`open5gs-rcf-rca`) reads them from Secrets Manager **at runtime**, so the instant RCF fires it POSTs the incident and the agent starts investigating — no redeploy needed.""")
 
 code('''# \u2500\u2500\u2500 PASTE your DevOps Agent webhook details here \u2500\u2500\u2500
 DEVOPS_AGENT_WEBHOOK_URL    = "PASTE_YOUR_WEBHOOK_URL_HERE"
@@ -194,7 +194,7 @@ DEVOPS_AGENT_WEBHOOK_SECRET = "PASTE_YOUR_WEBHOOK_SECRET_HERE"
 DEVOPS_AGENT_AUTH           = "hmac"   # "hmac" (x-amzn-event-signature) or "bearer" (Authorization: Bearer)
 print("Values set. Run the next cell to wire them into Secrets Manager.")''')
 
-code('''# Wire the webhook into the RCA Lambda's Secrets Manager secret (read at runtime -> no redeploy).
+code('''# Wire the webhook into the forwarder Lambda's Secrets Manager secret (read at runtime -> no redeploy).
 import boto3, json as _json
 _SECRET_ID = "open5gs/devops-agent/webhook"
 if "PASTE_" in DEVOPS_AGENT_WEBHOOK_URL or "PASTE_" in DEVOPS_AGENT_WEBHOOK_SECRET:
@@ -317,17 +317,17 @@ md("""## Step 5: The AWS DevOps Agent Investigates (Automated RCA)
 This is the payoff. The moment the RCF score crossed the threshold in Step 4, the `RCF5GRegistrationDrop`
 alert fired and the pipeline ran **with no human in the loop**:
 
-`RCF alert → AMP Alertmanager → SNS (open5gs-rcf-rca-trigger) → RCA Lambda (open5gs-rcf-rca) → your DevOps Agent webhook`
+`RCF alert → AMP Alertmanager → SNS (open5gs-rcf-rca-trigger) → forwarder Lambda (open5gs-rcf-rca) → your DevOps Agent webhook`
 
-The RCA Lambda queried AMP (per-AMF registration + AMF pod restarts), identified the crash-looping AMF, and
-POSTed an incident to the webhook you wired in **Step 2** — so the **AWS DevOps Agent has already started an
-autonomous investigation**. Open your **Agent Space → Incidents** in the DevOps Agent web app to watch its
-timeline and root-cause finding.
+The forwarder Lambda posted the incident to the webhook you wired in **Step 2** — it does **not** investigate
+itself. The **AWS DevOps Agent has already started the full autonomous investigation**: it queries the metrics
+and inspects the cluster to identify the failing network function. Open your **Agent Space → Incidents** in the
+DevOps Agent web app to watch its timeline and root-cause finding.
 
 The cell below (1) confirms the webhook is still wired, then (2) prints the same signals the agent correlates,
 so you can compare its conclusion against ground truth.""")
 
-code('''# Confirm the pipeline is armed (the webhook the RCA Lambda POSTs to when RCF fires)
+code('''# Confirm the pipeline is armed (the webhook the forwarder Lambda POSTs to when RCF fires)
 import boto3, json as _json
 try:
     _raw = boto3.client("secretsmanager", region_name=REGION).get_secret_value(
@@ -337,7 +337,7 @@ try:
         print("Webhook wired (auth=" + str(_cfg.get("auth", "?")) + ") - RCF alerts POST to the DevOps Agent.")
         print("  Open the DevOps Agent Space -> Incidents to watch the live investigation.")
     else:
-        print("Webhook NOT set - re-run the Step 2 wiring cell (until then the RCA Lambda only logs to CloudWatch).")
+        print("Webhook NOT set - re-run the Step 2 wiring cell (until then the Lambda only logs the alert to CloudWatch).")
 except Exception as e:
     print("Could not read webhook secret: " + str(e)[:120])''')
 

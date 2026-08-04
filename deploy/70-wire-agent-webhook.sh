@@ -5,7 +5,7 @@
 #   1. `cdk deploy Open5gsAmpStack` has run (the Secrets Manager secret + Lambda exist).
 #   2. You created the DevOps Agent Space in the console and have its webhook URL + auth token.
 #
-# What it does: writes {"url","token"} into the Secrets Manager secret that the RCA Lambda
+# What it does: writes {"url","token"} into the Secrets Manager secret that the forwarder Lambda
 # reads at runtime. Re-run anytime to rotate. The token is entered hidden and passed via a
 # 0600 temp file, so it never lands in shell history or the process list (argv).
 #

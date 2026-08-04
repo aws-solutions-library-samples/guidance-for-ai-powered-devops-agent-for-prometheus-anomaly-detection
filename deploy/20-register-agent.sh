@@ -31,7 +31,7 @@ elif printf '%s' "$err" | grep -q "AccessDeniedException"; then
 
    This step is OPTIONAL. It only lets the DevOps Agent QUERY Amazon Managed Prometheus during
    an investigation. The demo still works without it: the RCF alert triggers the agent via the
-   WEBHOOK (deploy/70-wire-agent-webhook.sh), and the RCA Lambda logs the root cause to
+   WEBHOOK (deploy/70-wire-agent-webhook.sh), and the forwarder Lambda logs the alert to
    CloudWatch regardless.
 
    To enable later: turn on the AWS DevOps Agent in the console, request allow-listing for the

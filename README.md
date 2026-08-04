@@ -23,13 +23,13 @@
 
 ## Overview
 
-This Guidance detects anomalies in a live **5G mobile core network** using **Random Cut Forest (RCF)** anomaly detection on **Amazon Managed Prometheus (AMP)**, then **automatically runs root-cause analysis (RCA)** and hands the incident to the **AWS DevOps Agent** for an autonomous investigation.
+This Guidance detects anomalies in a live **5G mobile core network** using **Random Cut Forest (RCF)** anomaly detection on **Amazon Managed Prometheus (AMP)**, then **automatically triggers the AWS DevOps Agent** to investigate the incident autonomously.
 
-A real [open5gs](https://open5gs.org/) 5G core (2 AMFs, 1 SMF, 4 UPFs, and supporting network functions) with **1,000 simulated subscribers** (UERANSIM) runs on Amazon EKS and emits registration and session metrics. Prometheus remote-writes those metrics to AMP using SigV4 and IRSA. An RCF detector learns the normal baseline and fires an alert when an infrastructure fault causes a subscriber drop. The alert flows through AMP Alertmanager to Amazon SNS to an RCA Lambda function, which correlates the drop to the culprit network function and posts an incident to the DevOps Agent webhook — which then investigates on its own.
+A real [open5gs](https://open5gs.org/) 5G core (2 AMFs, 1 SMF, 4 UPFs, and supporting network functions) with **1,000 simulated subscribers** (UERANSIM) runs on Amazon EKS and emits registration and session metrics. Prometheus remote-writes those metrics to AMP using SigV4 and IRSA. An RCF detector learns the normal baseline and fires an alert when an infrastructure fault causes a subscriber drop. The alert flows through AMP Alertmanager to Amazon SNS to a forwarder Lambda function, which posts the incident to the DevOps Agent webhook — and the **AWS DevOps Agent then performs the entire investigation itself**, querying metrics and inspecting the cluster to identify the failing network function.
 
 **Use case:** SRE and NOC automation for telco and other high-scale workloads — turning a raw anomaly signal into an attributed, actionable incident with no human in the loop.
 
-**Demo scenario:** a bad config push crashes AMF1 → ~500 subscribers (TAC=1) lose registration → the RCF score spikes → the `RCF5GRegistrationDrop` alert fires → the RCA Lambda identifies AMF1 as the crash-looping culprit and forwards the incident to the DevOps Agent. AMF2 (the other ~500 subscribers) is unaffected.
+**Demo scenario:** a bad config push crashes AMF1 → ~500 subscribers (TAC=1) lose registration → the RCF score spikes → the `RCF5GRegistrationDrop` alert fires → the forwarder Lambda posts the incident to the DevOps Agent, which investigates and identifies AMF1 as the crash-looping culprit. AMF2 (the other ~500 subscribers) is unaffected.
 
 ### Architecture
 
@@ -44,8 +44,8 @@ A real [open5gs](https://open5gs.org/) 5G core (2 AMFs, 1 SMF, 4 UPFs, and suppo
 3. An AMP **RCF anomaly detector** scores `sum(fivegs_amffunction_rm_registeredsubnbr)` every 30 seconds.
 4. When the score crosses `0.1`, the `RCF5GRegistrationDrop` alert rule fires.
 5. AMP **Alertmanager** routes the alert to an Amazon **SNS** topic (`open5gs-rcf-rca-trigger`).
-6. The **RCA Lambda** (`open5gs-rcf-rca`) queries AMP (per-AMF registration + pod restarts), names the culprit AMF, and **POSTs an incident to the DevOps Agent webhook** (HMAC or API-key auth; the webhook URL/token live in AWS Secrets Manager and are read at runtime).
-7. The **AWS DevOps Agent** runs an autonomous investigation. It can query AMP directly through the OAuth2-secured **Prometheus MCP** (API Gateway + Amazon Cognito + Lambda) registered as a capability provider.
+6. The **forwarder Lambda** (`open5gs-rcf-rca`) reads the DevOps Agent webhook URL/token from **AWS Secrets Manager** at runtime and **POSTs the incident to the webhook** (HMAC or API-key auth). It does not query metrics or derive root cause.
+7. The **AWS DevOps Agent** performs the **entire autonomous investigation** — querying AMP through the OAuth2-secured **Prometheus MCP** (API Gateway + Amazon Cognito + Lambda) registered as a capability provider, and inspecting the EKS workload — to pinpoint the failing network function.
 8. An **Amazon SageMaker** notebook drives the end-to-end demo: baseline → wire the agent → inject the fault → observe the anomaly → watch the automated investigation → recover.
 
 ![RCF Data Flow](docs/diagrams/rcf-dataflow.svg)
@@ -75,8 +75,8 @@ We recommend creating a [budget](https://docs.aws.amazon.com/cost-management/lat
 |---|---|
 | Amazon EKS | Runs the open5gs 5G core + UERANSIM (RAN/UE simulator) |
 | Amazon Managed Prometheus (AMP) | Metric store, RCF anomaly detector, alert rules, Alertmanager |
-| Amazon SNS | Delivers the RCF alert to the RCA Lambda |
-| AWS Lambda | RCA correlation + DevOps Agent webhook forwarding; Prometheus MCP server |
+| Amazon SNS | Delivers the RCF alert to the forwarder Lambda |
+| AWS Lambda | Forwards the incident to the DevOps Agent webhook; Prometheus MCP server |
 | Amazon API Gateway + Amazon Cognito | OAuth2-secured MCP endpoint for the DevOps Agent |
 | AWS Secrets Manager | Stores the DevOps Agent webhook URL + token (read at runtime) |
 | Amazon SageMaker | Demo notebook |
@@ -135,7 +135,7 @@ The `deploy/` scripts are numbered in run order. Set your profile first: `export
 ./deploy/60-grant-notebook-eks-access.sh
 ```
 
-Step 1 creates: the AMP workspace, RCF anomaly detector, alert rules, the automated RCA pipeline (SNS topic + RCA Lambda + Alertmanager routing + the empty DevOps Agent webhook secret), the Prometheus MCP (Lambda / API Gateway / Cognito), and the SageMaker notebook.
+Step 1 creates: the AMP workspace, RCF anomaly detector, alert rules, the alert-forwarding pipeline (SNS topic + forwarder Lambda + Alertmanager routing + the empty DevOps Agent webhook secret), the Prometheus MCP (Lambda / API Gateway / Cognito), and the SageMaker notebook.
 
 ## Deployment Validation
 
@@ -154,10 +154,10 @@ aws cloudformation describe-stacks --query "Stacks[].StackName" --output text
 Open **SageMaker → Notebook Instances → `open5gs-rcf-anomaly-demo` → Open Jupyter** and run `rcf-anomaly-detection-demo.ipynb`. The notebook is ordered so the DevOps Agent is wired **before** the fault:
 
 1. **Step 1** — verify the healthy baseline (1000 subscribers registered, RCF score 0).
-2. **Step 2 — Set up & wire the AWS DevOps Agent (before the fault).** Follow the in-notebook guidance to create the Agent Space, add the MCP capability, and generate a webhook. Paste the **webhook URL + secret** into the placeholder cell, set the auth type (`hmac` or `bearer`), and run the **wiring cell** — it stores `{url, token, auth}` in Secrets Manager (`open5gs/devops-agent/webhook`), which the RCA Lambda reads at runtime.
+2. **Step 2 — Set up & wire the AWS DevOps Agent (before the fault).** Follow the in-notebook guidance to create the Agent Space, add the MCP capability, and generate a webhook. Paste the **webhook URL + secret** into the placeholder cell, set the auth type (`hmac` or `bearer`), and run the **wiring cell** — it stores `{url, token, auth}` in Secrets Manager (`open5gs/devops-agent/webhook`), which the forwarder Lambda reads at runtime.
 3. **Step 3** — inject the fault (bad config → AMF1 CrashLoopBackOff → ~500 subscribers drop).
 4. **Step 4** — observe the anomaly (the RCF score spikes; use the range query in UTC to catch the single-cycle spike).
-5. **Step 5 — the DevOps Agent investigates automatically.** The RCF alert → SNS → RCA Lambda → your webhook, and the agent starts an autonomous investigation. Open **Agent Space → Incidents** to watch it; the notebook also confirms the webhook is wired and prints the ground-truth signals.
+5. **Step 5 — the DevOps Agent investigates automatically.** The RCF alert → SNS → forwarder Lambda → your webhook, and the agent runs the full autonomous investigation. Open **Agent Space → Incidents** to watch it; the notebook also confirms the webhook is wired and prints the ground-truth signals so you can compare the agent's conclusion.
 6. **Step 6** — recover (restore config, subscribers re-register to 1000).
 
 ### Quick fault injection (CLI alternative)
@@ -166,7 +166,7 @@ Open **SageMaker → Notebook Instances → `open5gs-rcf-anomaly-demo` → Open 
 # Break AMF1 (~500 TAC=1 subscribers lose service; AMF2 unaffected)
 ./manifests/fault-inject-amf1.sh break
 
-# The RCF alert fires -> the RCA Lambda names AMF1 and POSTs to the DevOps Agent webhook. Watch the Lambda:
+# The RCF alert fires -> the forwarder Lambda POSTs the incident to the DevOps Agent webhook. Watch the Lambda:
 #   aws logs filter-log-events --log-group-name /aws/lambda/open5gs-rcf-rca --start-time <epoch-ms>
 #   (look for "Agent webhook status: 2xx")
 
@@ -174,13 +174,13 @@ Open **SageMaker → Notebook Instances → `open5gs-rcf-anomaly-demo` → Open 
 ./manifests/fault-inject-amf1.sh fix
 ```
 
-If no webhook is configured, the RCA Lambda still runs and **logs** the root cause to CloudWatch. See [`docs/DEMO-RUNBOOK.md`](docs/DEMO-RUNBOOK.md) for the full step-by-step walkthrough and correlation queries.
+If no webhook is configured, the forwarder Lambda logs the alert to CloudWatch and forwards nothing. See [`docs/DEMO-RUNBOOK.md`](docs/DEMO-RUNBOOK.md) for the full step-by-step walkthrough and the signals the agent correlates.
 
 ## Next Steps
 
 - Wire the DevOps Agent webhook (Step 2 / `deploy/70-wire-agent-webhook.sh`) once your Agent Space exists, to see the fully autonomous investigation.
 - Add more RCF detectors (session count per UPF, PDU-session establishment rate) for richer anomaly coverage.
-- Extend the RCA Lambda to attach additional context (recent ConfigMap changes, node conditions) to the incident payload.
+- Extend the forwarder Lambda to attach additional context (recent ConfigMap changes, node conditions) to the incident payload it posts.
 - Adapt the pattern to your own workload: point Prometheus/AMP at your metrics, define an RCF detector on your key SLI, and reuse the SNS → Lambda → DevOps Agent bridge.
 
 ## Cleanup

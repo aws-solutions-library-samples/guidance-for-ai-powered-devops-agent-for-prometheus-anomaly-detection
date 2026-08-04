@@ -23,8 +23,8 @@
 </g>
 <g id="clust3" class="cluster">
 <title>cluster_rca</title>
-<path fill="#fdecf4" stroke="#b0327a" d="M312.91,-156C312.91,-156 1056.89,-156 1056.89,-156 1062.89,-156 1068.89,-162 1068.89,-168 1068.89,-168 1068.89,-284 1068.89,-284 1068.89,-290 1062.89,-296 1056.89,-296 1056.89,-296 312.91,-296 312.91,-296 306.91,-296 300.91,-290 300.91,-284 300.91,-284 300.91,-168 300.91,-168 300.91,-162 306.91,-156 312.91,-156"/>
-<text xml:space="preserve" text-anchor="start" x="541.27" y="-279.7" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">Automated RCA pipeline (CDK · scenario 2b)</text>
+<path fill="#fdecf4" stroke="#b0327a" d="M312.91,-156C312.91,-156 1070.39,-156 1070.39,-156 1076.39,-156 1082.39,-162 1082.39,-168 1082.39,-168 1082.39,-284 1082.39,-284 1082.39,-290 1076.39,-296 1070.39,-296 1070.39,-296 312.91,-296 312.91,-296 306.91,-296 300.91,-290 300.91,-284 300.91,-284 300.91,-168 300.91,-168 300.91,-162 306.91,-156 312.91,-156"/>
+<text xml:space="preserve" text-anchor="start" x="548.02" y="-279.7" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">Automated RCA pipeline (CDK · scenario 2b)</text>
 </g>
 <!-- core -->
 <g id="node1" class="node">
@@ -172,15 +172,15 @@
 <!-- rca -->
 <g id="node11" class="node">
 <title>rca</title>
-<path fill="#f6d9ea" stroke="black" stroke-width="1.3" d="M1048.89,-228C1048.89,-228 901.23,-228 901.23,-228 895.23,-228 889.23,-222 889.23,-216 889.23,-216 889.23,-204 889.23,-204 889.23,-198 895.23,-192 901.23,-192 901.23,-192 1048.89,-192 1048.89,-192 1054.89,-192 1060.89,-198 1060.89,-204 1060.89,-204 1060.89,-216 1060.89,-216 1060.89,-222 1054.89,-228 1048.89,-228"/>
-<text xml:space="preserve" text-anchor="start" x="899.31" y="-210.55" font-family="Helvetica,sans-Serif" font-size="11.00">RCA Lambda (open5gs&#45;rcf&#45;rca)</text>
-<text xml:space="preserve" text-anchor="start" x="907.56" y="-201.45" font-family="Helvetica,sans-Serif" font-size="9.00">queries AMP · names culprit AMF</text>
+<path fill="#f6d9ea" stroke="black" stroke-width="1.3" d="M1062.39,-228C1062.39,-228 887.73,-228 887.73,-228 881.73,-228 875.73,-222 875.73,-216 875.73,-216 875.73,-204 875.73,-204 875.73,-198 881.73,-192 887.73,-192 887.73,-192 1062.39,-192 1062.39,-192 1068.39,-192 1074.39,-198 1074.39,-204 1074.39,-204 1074.39,-216 1074.39,-216 1074.39,-222 1068.39,-228 1062.39,-228"/>
+<text xml:space="preserve" text-anchor="start" x="885.81" y="-210.55" font-family="Helvetica,sans-Serif" font-size="11.00">Forwarder Lambda (open5gs&#45;rcf&#45;rca)</text>
+<text xml:space="preserve" text-anchor="start" x="909.43" y="-201.45" font-family="Helvetica,sans-Serif" font-size="9.00">posts incident to agent webhook</text>
 </g>
 <!-- almgr&#45;&gt;rca -->
 <g id="edge10" class="edge">
 <title>almgr&#45;&gt;rca</title>
-<path fill="none" stroke="#5b6b7a" d="M740.95,-187.2C771.44,-189.8 808.64,-193.06 841.98,-196.25 853.46,-197.35 865.49,-198.54 877.43,-199.75"/>
-<polygon fill="#5b6b7a" stroke="#5b6b7a" points="877.01,-203.23 887.32,-200.76 877.72,-196.26 877.01,-203.23"/>
+<path fill="none" stroke="#5b6b7a" d="M740.95,-187.2C771.44,-189.8 808.64,-193.06 841.98,-196.25 849.14,-196.93 856.52,-197.66 863.96,-198.4"/>
+<polygon fill="#5b6b7a" stroke="#5b6b7a" points="863.46,-201.87 873.76,-199.38 864.16,-194.9 863.46,-201.87"/>
 <text xml:space="preserve" text-anchor="middle" x="810.85" y="-197.45" font-family="Helvetica,sans-Serif" font-size="9.00">SNS</text>
 </g>
 <!-- rca&#45;&gt;amp -->
@@ -209,8 +209,8 @@
 <!-- sm&#45;&gt;rca -->
 <g id="edge11" class="edge">
 <title>sm&#45;&gt;rca</title>
-<path fill="none" stroke="#5b6b7a" stroke-dasharray="5,2" d="M741.83,-239.06C781.4,-234.11 833.11,-227.64 877.69,-222.06"/>
-<polygon fill="#5b6b7a" stroke="#5b6b7a" points="877.87,-225.57 887.36,-220.85 877,-218.62 877.87,-225.57"/>
+<path fill="none" stroke="#5b6b7a" stroke-dasharray="5,2" d="M741.83,-239.06C777.42,-234.61 822.83,-228.93 864.04,-223.77"/>
+<polygon fill="#5b6b7a" stroke="#5b6b7a" points="864.26,-227.27 873.75,-222.55 863.4,-220.32 864.26,-227.27"/>
 <text xml:space="preserve" text-anchor="middle" x="810.85" y="-235.18" font-family="Helvetica,sans-Serif" font-size="9.00">webhook creds</text>
 </g>
 </g>

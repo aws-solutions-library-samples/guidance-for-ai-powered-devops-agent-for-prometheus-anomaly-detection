@@ -76,7 +76,7 @@ export class NotebookStack extends cdk.Stack {
           statements: [
             new iam.PolicyStatement({
               // Lets the demo notebook's "wire the DevOps Agent" cell store the webhook
-              // URL + secret so the RCA Lambda forwards incidents. Scoped to that one secret.
+              // URL + secret so the forwarder Lambda posts incidents. Scoped to that one secret.
               actions: [
                 'secretsmanager:GetSecretValue',
                 'secretsmanager:PutSecretValue',

@@ -16,7 +16,7 @@ import { Construct } from 'constructs';
  *   with an Alertmanager definition that routes the RCF alert to SNS.
  * - RCF Anomaly Detector on sum(fivegs_amffunction_rm_registeredsubnbr)
  * - Alert rule: fires when RCF score > 0.1 (onset detection, for: 0s)
- * - Automated RCA pipeline (2b): SNS topic -> Lambda bridge that runs the RCA correlation
+ * - Alert-forwarding pipeline: SNS topic -> Lambda that forwards the incident to the
  *   (identifies which AMF dropped via AMP) and forwards an incident to the DevOps Agent
  *   webhook. The webhook {url,token} lives in a Secrets Manager secret that a human fills
  *   in AFTER creating the Agent Space (console or deploy/70-wire-agent-webhook.sh) — the
@@ -146,21 +146,14 @@ export class AmpStack extends cdk.Stack {
       code: lambda.Code.fromAsset(path.join(__dirname, '../lambda-rca')),
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
-      description: 'Runs RCA on the RCF alert and forwards to the DevOps Agent webhook (from Secrets Manager)',
+      description: 'Forwards the RCF alert to the AWS DevOps Agent webhook (URL/token from Secrets Manager); the agent performs the investigation',
       environment: {
-        AMP_WORKSPACE_ID: ws.attrWorkspaceId,
         AGENT_WEBHOOK_SECRET_ARN: agentSecret.secretArn,
         DEVOPS_AGENT_WEBHOOK_URL: devopsAgentWebhookUrl,
       },
     });
 
-    // Least-privilege: query only this AMP workspace.
-    rcaFn.addToRolePolicy(new iam.PolicyStatement({
-      actions: ['aps:QueryMetrics', 'aps:GetSeries', 'aps:GetLabels', 'aps:GetMetricMetadata'],
-      resources: [ws.attrArn],
-    }));
-
-    // Let the Lambda read the webhook secret at runtime (adds GetSecretValue + KMS decrypt).
+    // Pure forwarder: no AMP access needed — it only reads the webhook secret at runtime.
     agentSecret.grantRead(rcaFn);
 
     // SNS -> Lambda (LambdaSubscription adds the invoke permission automatically).

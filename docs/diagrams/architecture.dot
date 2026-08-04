@@ -30,12 +30,12 @@ digraph amp {
   conncdk [label=<agent-connectivity (CDK)<BR/><FONT POINT-SIZE="9">register-service · NO create-agent-space</FONT>>, shape=note, fillcolor="#fdecec", color="#c0392b"];
   conncdk -> agent [style=dotted, label="registers MCP", color="#c0392b"];
 
-  // ── Automated RCA pipeline (scenario 2b): RCF alert → SNS → RCA Lambda → DevOps Agent webhook ──
+  // ── Alert-forwarding pipeline: RCF alert → SNS → forwarder Lambda → DevOps Agent webhook ──
   subgraph cluster_rca {
     label=<<B>Automated RCA pipeline (CDK · scenario 2b)</B>>; style="rounded,filled"; fillcolor="#fdecf4"; color="#b0327a";
     rcf [label=<RCF anomaly detector<BR/><FONT POINT-SIZE="9">score on sum(registeredsubnbr) &gt; 0.1</FONT>>, fillcolor="#f6d9ea"];
     almgr [label=<Alertmanager → SNS<BR/><FONT POINT-SIZE="9">RCF5GRegistrationDrop</FONT>>, fillcolor="#f6d9ea"];
-    rca [label=<RCA Lambda (open5gs-rcf-rca)<BR/><FONT POINT-SIZE="9">queries AMP · names culprit AMF</FONT>>, fillcolor="#f6d9ea"];
+    rca [label=<Forwarder Lambda (open5gs-rcf-rca)<BR/><FONT POINT-SIZE="9">posts incident to agent webhook</FONT>>, fillcolor="#f6d9ea"];
     sm [label=<Secrets Manager<BR/><FONT POINT-SIZE="9">agent webhook url + token</FONT>>, shape=note, fillcolor="#f6ebd2"];
     rcf -> almgr [label="alert"]; almgr -> rca [label="SNS"]; sm -> rca [style=dashed, label="webhook creds"];
   }
