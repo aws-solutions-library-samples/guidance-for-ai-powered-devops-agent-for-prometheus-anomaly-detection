@@ -1,6 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import * as sagemaker from 'aws-cdk-lib/aws-sagemaker';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as kms from 'aws-cdk-lib/aws-kms';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -162,16 +163,22 @@ chown -R ec2-user:ec2-user /home/ec2-user/SageMaker/
     }
 
     // SageMaker Notebook Instance (VPC-attached when context is provided)
-    // kmsKeyId: use the account's default AWS-managed KMS key for EBS. cdk-nag SM2
-    // requires an explicit key; AWS-managed alias 'aws/sagemaker' is created on demand.
-    const kmsAlias = 'alias/aws/sagemaker';
+    // KMS: stack-owned key rather than 'alias/aws/sagemaker'. The AWS-managed alias is
+    // created lazily by SageMaker on first use, so a truly fresh account fails to resolve
+    // it during the notebook's own creation. A stack-owned key removes that dependency
+    // and satisfies cdk-nag AwsSolutions-SM2.
+    const notebookKey = new kms.Key(this, 'NotebookVolumeKey', {
+      description: 'SageMaker notebook EBS volume encryption (open5gs-rcf-anomaly-demo)',
+      enableKeyRotation: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
     const notebook = new sagemaker.CfnNotebookInstance(this, 'DemoNotebook', {
       instanceType: 'ml.t3.medium',
       roleArn: role.roleArn,
       notebookInstanceName: 'open5gs-rcf-anomaly-demo',
       lifecycleConfigName: lifecycleConfig.attrNotebookInstanceLifecycleConfigName,
       volumeSizeInGb: 10,
-      kmsKeyId: kmsAlias,
+      kmsKeyId: notebookKey.keyArn,
       ...vpcProps,
     });
     notebook.addDependency(lifecycleConfig);

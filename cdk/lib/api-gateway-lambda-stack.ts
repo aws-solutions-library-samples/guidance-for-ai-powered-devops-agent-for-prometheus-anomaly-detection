@@ -2,6 +2,7 @@ import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -37,6 +38,18 @@ export class APIGatewayLambdaStack extends cdk.Stack {
     });
 
     // API Gateway
+    // API Gateway needs a CloudWatch role at the ACCOUNT level before any stage can enable
+    // access logging. This is a one-time-per-account/region setting. CfnAccount is
+    // idempotent — if the account already has a role, this replaces it with the same one.
+    const apiGwCwRole = new iam.Role(this, 'ApiGwCloudWatchRole', {
+      assumedBy: new iam.ServicePrincipal('apigateway.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonAPIGatewayPushToCloudWatchLogs'),
+      ],
+    });
+    const apiGwAccount = new apigateway.CfnAccount(this, 'ApiGwAccount', {
+      cloudWatchRoleArn: apiGwCwRole.roleArn,
+    });
     const apiLogGroup = new logs.LogGroup(this, 'MCPAPIAccessLogs', {
       retention: logs.RetentionDays.ONE_MONTH,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -57,6 +70,8 @@ export class APIGatewayLambdaStack extends cdk.Stack {
         metricsEnabled: true,
       },
     });
+    // The account-level CloudWatch role must exist before the stage (and thus the API) is created.
+    this.api.node.addDependency(apiGwAccount);
 
     // Lambda Authorizer
     const authorizer = new apigateway.TokenAuthorizer(this, 'MCPAuthorizer', {

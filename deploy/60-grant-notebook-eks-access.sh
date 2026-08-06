@@ -34,17 +34,28 @@ echo "✓ Notebook role granted EKS access (authorization)."
 echo "Resolving cluster networking for private-endpoint access..."
 VPC=$(aws eks describe-cluster --region "$REGION" --name "$CLUSTER" --query cluster.resourcesVpcConfig.vpcId --output text)
 CSG=$(aws eks describe-cluster --region "$REGION" --name "$CLUSTER" --query cluster.resourcesVpcConfig.clusterSecurityGroupId --output text)
-# eksctl tags private subnets with internal-elb=1; pick one that has a NAT route (internet for pip/kubectl)
+# SageMaker instance types (like ml.t3.medium) are NOT uniformly available across AZs
+# and SageMaker's availability is a strict subset of EC2's — the EC2 offerings API
+# reports 't3.medium' as available in us-east-1h, but SageMaker refuses 'ml.t3.medium'
+# there. Explicit blocklist of known-problem SageMaker AZs (override via env if needed).
+BAD_AZS="${BAD_AZS:-us-east-1e us-east-1h us-west-2d}"
+# Filter to matching subnets in eksctl's internal-elb (private) subnets AND with NAT,
+# skipping any subnet in a known-bad AZ.
 SUBNET=""
 for sn in $(aws ec2 describe-subnets --region "$REGION" \
       --filters "Name=vpc-id,Values=$VPC" "Name=tag:kubernetes.io/role/internal-elb,Values=1" \
       --query 'Subnets[].SubnetId' --output text); do
+  AZ=$(aws ec2 describe-subnets --region "$REGION" --subnet-ids "$sn" --query 'Subnets[0].AvailabilityZone' --output text)
+  if echo " $BAD_AZS " | grep -q " $AZ "; then
+    echo "  skipping $sn ($AZ) — known-problem SageMaker AZ"
+    continue
+  fi
   NAT=$(aws ec2 describe-route-tables --region "$REGION" --filters "Name=association.subnet-id,Values=$sn" \
         --query 'RouteTables[0].Routes[?DestinationCidrBlock==`0.0.0.0/0`].NatGatewayId' --output text)
   if [ -n "$NAT" ] && [ "$NAT" != "None" ]; then SUBNET="$sn"; break; fi
 done
 if [ -z "$SUBNET" ]; then
-  echo "  ! No private subnet with NAT found in $VPC; leaving notebook public."; exit 0
+  echo "  ! No private subnet with NAT in a compatible AZ found in $VPC; leaving notebook public."; exit 0
 fi
 echo "  VPC=$VPC  subnet=$SUBNET  clusterSG=$CSG"
 
