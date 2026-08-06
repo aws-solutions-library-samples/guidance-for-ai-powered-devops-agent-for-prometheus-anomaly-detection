@@ -72,11 +72,30 @@ kubectl patch prometheus "$PROM" -n monitoring --type merge \
 echo "=== 7. Provision 1000 subscribers (4 DNNs x 250 UEs) via bulkWrite ==="
 bash "$HERE/manifests/provision-1000-subscribers.sh"
 
-echo "=== 8. Deploy UERANSIM RAN: 4 StatefulSets x 25 pods x 10 UEs = 1000 UEs ==="
+echo "=== 8. Deploy UERANSIM RAN — paced to avoid AMF overload ==="
+# The manifest defines 4 StatefulSets with replicas: 25 (100 gNBs, 1000 UEs). If they all
+# come up simultaneously, 1000 UEs attach in a burst and open5gs 2.6.6 AMFs can crash with
+# SIGSEGV (exit 139); UEs that hit the crash window then get stuck in "PLMN selection
+# failure, no cells in coverage" and never retry. Pacing the rollout — one StatefulSet at
+# a time with a gap for UEs to register — avoids the storm entirely.
+#
+# The manifest is applied once, then we immediately scale all StatefulSets to 0 so we can
+# bring them up serially. The initial 'scale --replicas=0' is fast enough that even if
+# some pods have started creating, they terminate cleanly.
 kubectl apply -f "$HERE/manifests/ueransim-multi.yaml"
+for sts in gnb1a gnb1b gnb2a gnb2b; do
+  kubectl scale statefulset/$sts -n open5gs --replicas=0 >/dev/null
+done
+for sts in gnb1a gnb1b gnb2a gnb2b; do
+  echo "  --- $sts: scaling to 25 replicas (250 UEs on TAC $(echo $sts | tr -d 'gnb' | head -c1))..."
+  kubectl scale statefulset/$sts -n open5gs --replicas=25
+  kubectl rollout status statefulset/$sts -n open5gs --timeout=300s
+  echo "      waiting 60s for UEs to register before the next batch..."
+  sleep 60
+done
 
-echo "=== 9. Wait ~100s for gNB associations + UE registrations to settle, then verify ==="
-sleep 100
+echo "=== 9. Verify open5gs metrics reach AMP (UEs registered during the paced rollout above) ==="
+sleep 30    # small buffer for the last StatefulSet's UEs
 WS="${AMP_WORKSPACE_ID:-$(aws amp list-workspaces --alias open5gs-amp --region "$R" --query 'workspaces[0].workspaceId' --output text)}"
 python3 - "$R" "$WS" <<'PY'
 import sys, boto3, requests
