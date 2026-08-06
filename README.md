@@ -151,6 +151,8 @@ aws cloudformation describe-stacks --query "Stacks[].StackName" --output text
 
 ## Running the Guidance
 
+> **Important — wait ~2 hours after `deploy/50` finishes before injecting the fault.** The RCF anomaly detector needs a stable training baseline before its score reliably crosses the alert threshold. With the default configuration (`shingleSize=8`, `sampleSize=256`, evaluation every 30s), it needs ≈128 minutes of steady 1000-UE registration data. If you inject the fault too early, AMF1 will crash-loop and ~500 UEs will deregister exactly as expected, but the RCF score may stay below `0.1` and the alert will not fire. See the FAQ for how to verify the SNS → Lambda pipeline without waiting.
+
 Open **SageMaker → Notebook Instances → `open5gs-rcf-anomaly-demo` → Open Jupyter** and run `rcf-anomaly-detection-demo.ipynb`. The notebook is ordered so the DevOps Agent is wired **before** the fault:
 
 1. **Step 1** — verify the healthy baseline (1000 subscribers registered, RCF score 0).
@@ -200,7 +202,15 @@ cd cdk && cdk destroy --all
 ## FAQ and Known Issues
 
 - **`deploy/20` fails with `AccessDeniedException … Only external and exempted accounts are allowed`.** The `devops-agent register-service` API is a gated preview; your account isn't allow-listed. This step is optional and the script now skips it gracefully — the webhook path still works. Request allow-listing to enable it later. See [Prerequisites](#aws-account-requirements).
-- **The RCF score reads 0 right after the fault.** The score spikes for a single ~30-second cycle, then the model adapts. Query the score over a **time range in UTC** (as the notebook does) rather than an instant query.
+- **The RCF alert doesn't fire even though AMF1 crashed and ~500 UEs deregistered.** The RCF detector needs enough training data to be confident that the drop is anomalous. Wait **≈2 hours after `deploy/50` finishes** for the model to accumulate 128+ minutes of stable baseline before injecting the fault. To validate the SNS → forwarder Lambda → webhook pipeline without waiting, publish a synthetic Alertmanager message directly to the topic:
+  ```bash
+  TOPIC=$(aws sns list-topics --query "Topics[?contains(TopicArn,'open5gs-rcf-alert-trigger')].TopicArn" --output text)
+  aws sns publish --topic-arn "$TOPIC" --subject "RCF 5G registration anomaly" \
+    --message '{"receiver":"agent-forwarder-sns","status":"firing","alerts":[{"status":"firing","labels":{"alertname":"RCF5GRegistrationDrop","alias":"5g-registered-subscribers"},"annotations":{"summary":"synthetic test"}}]}'
+  # then check the Lambda log:
+  aws logs filter-log-events --log-group-name /aws/lambda/open5gs-rcf-agent-forwarder --start-time $(($(date +%s)*1000 - 60000)) --query 'events[].message' --output text
+  ```
+- **The RCF score reads 0 right after the fault.** Even after enough training, the score spikes for a single ~30-second cycle and then the model adapts. Query the score over a **time range in UTC** (as the notebook does) rather than an instant query.
 - **The EKS nodegroup scaled to 0 / `kubectl` shows no nodes.** Idle-automation may scale the nodegroup to zero. Re-scale: `aws eks update-nodegroup-config --cluster-name open5gs-amp-cluster --nodegroup-name ng-1 --scaling-config minSize=2,maxSize=3,desiredSize=2`.
 
 ## Notices
