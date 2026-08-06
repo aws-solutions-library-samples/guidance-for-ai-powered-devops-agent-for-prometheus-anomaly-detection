@@ -162,12 +162,16 @@ chown -R ec2-user:ec2-user /home/ec2-user/SageMaker/
     }
 
     // SageMaker Notebook Instance (VPC-attached when context is provided)
+    // kmsKeyId: use the account's default AWS-managed KMS key for EBS. cdk-nag SM2
+    // requires an explicit key; AWS-managed alias 'aws/sagemaker' is created on demand.
+    const kmsAlias = 'alias/aws/sagemaker';
     const notebook = new sagemaker.CfnNotebookInstance(this, 'DemoNotebook', {
       instanceType: 'ml.t3.medium',
       roleArn: role.roleArn,
       notebookInstanceName: 'open5gs-rcf-anomaly-demo',
       lifecycleConfigName: lifecycleConfig.attrNotebookInstanceLifecycleConfigName,
       volumeSizeInGb: 10,
+      kmsKeyId: kmsAlias,
       ...vpcProps,
     });
     notebook.addDependency(lifecycleConfig);

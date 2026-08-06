@@ -2,6 +2,7 @@ import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Construct } from 'constructs';
@@ -36,6 +37,10 @@ export class APIGatewayLambdaStack extends cdk.Stack {
     });
 
     // API Gateway
+    const apiLogGroup = new logs.LogGroup(this, 'MCPAPIAccessLogs', {
+      retention: logs.RetentionDays.ONE_MONTH,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
     this.api = new apigateway.RestApi(this, 'MCPAPI', {
       restApiName: 'Prometheus MCP Lambda API',
       description: 'Machine-to-Machine API for Prometheus MCP Server via Lambda',
@@ -43,6 +48,13 @@ export class APIGatewayLambdaStack extends cdk.Stack {
         allowOrigins: apigateway.Cors.ALL_ORIGINS,
         allowMethods: apigateway.Cors.ALL_METHODS,
         allowHeaders: ['Content-Type', 'Authorization'],
+      },
+      // cdk-nag APIG1/APIG6: access logging + per-method CloudWatch logging on the prod stage.
+      deployOptions: {
+        accessLogDestination: new apigateway.LogGroupLogDestination(apiLogGroup),
+        accessLogFormat: apigateway.AccessLogFormat.jsonWithStandardFields(),
+        loggingLevel: apigateway.MethodLoggingLevel.INFO,
+        metricsEnabled: true,
       },
     });
 

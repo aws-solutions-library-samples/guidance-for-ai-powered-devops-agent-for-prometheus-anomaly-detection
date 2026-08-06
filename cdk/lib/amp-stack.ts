@@ -112,6 +112,7 @@ export class AmpStack extends cdk.Stack {
     const alertTopic = new sns.Topic(this, 'AlertTriggerTopic', {
       topicName: alertTopicName,
       displayName: 'open5gs RCF alert trigger',
+      enforceSSL: true,
     });
     this.alertTopicArn = alertTopic.topicArn;
 
