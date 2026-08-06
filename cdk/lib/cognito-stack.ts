@@ -11,13 +11,15 @@ export class CognitoStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    // Generate globally unique domain prefix with multiple entropy sources
-    const timestamp = Date.now().toString();
+    // Deterministic Cognito domain prefix. Cognito prefixes must be globally unique at
+    // creation time, but an account+region-scoped prefix is unique-enough and stable across
+    // synths. The upstream aws-samples version mixed Date.now() / Math.random() / process.pid
+    // in here, which regenerates the name on every deploy and forces CDK to REPLACE the
+    // domain resource — which Cognito rejects. Keeping this deterministic makes every
+    // subsequent 'cdk deploy' a no-op on the domain.
     const accountSuffix = this.account?.slice(-8) || 'xxxxxxxx';
-    const randomSuffix = Math.random().toString(36).substring(2, 10);
     const regionCode = this.region?.replace(/[^a-z0-9]/g, '') || 'useast1';
-    const processId = process.pid.toString(36);
-    const domainPrefix = process.env.COGNITO_DOMAIN_PREFIX || `mcp-${regionCode}-${accountSuffix}-${timestamp}-${randomSuffix}-${processId}`;
+    const domainPrefix = process.env.COGNITO_DOMAIN_PREFIX || `mcp-${regionCode}-${accountSuffix}`;
 
     // Cognito User Pool
     this.userPool = new cognito.UserPool(this, 'PrometheusUserPool', {
