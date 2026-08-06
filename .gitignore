@@ -7,3 +7,5 @@ dist/
 
 # Microsoft Office lock/owner files (created while a doc is open)
 ~$*
+logs/
+__pycache__/

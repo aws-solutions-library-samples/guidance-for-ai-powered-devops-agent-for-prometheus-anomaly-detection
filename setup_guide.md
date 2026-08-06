@@ -39,10 +39,12 @@ remote_writing to AMP via SigV4.
 ```bash
 ./deploy/50-open5gs.sh
 ```
-Applies `manifests/open5gs-core.yaml` (13 NFs pod-network, mongo PVC, **UPF UDP** service),
-annotates AMF/SMF/UPF/PCF for scrape, installs the `open5gs-nf` raw scrape job with
-`fallback_scrape_protocol` (`manifests/open5gs-scrape.yaml`), provisions the subscriber,
-and deploys UERANSIM (`manifests/ueransim.yaml`).
+Applies `manifests/open5gs-core-multi.yaml` (2 AMFs, 1 SMF, 4 UPFs + supporting NFs),
+overlays `manifests/open5gs-core-live-fixes.yaml` (working configs: dev:eth0 binds,
+direct-NRF, NSSF fixes), waits for the NFs to be Ready, injects the `open5gs-nf` raw
+scrape job with `fallback_scrape_protocol` (`manifests/open5gs-scrape.yaml`), provisions
+1,000 subscribers across 4 DNNs (`manifests/provision-1000-subscribers.sh`), and
+deploys the UERANSIM RAN (`manifests/ueransim-multi.yaml`: 4 StatefulSets × 25 pods × 10 UEs = 1,000 UEs).
 
 ## Verify
 ```bash
@@ -86,7 +88,7 @@ curl -s -X POST "$MCP" -H "Authorization: Bearer $TOKEN" -H "Content-Type: appli
 | `kubectl` times out / i/o timeout | egress IP rotated outside allowlist | update `publicAccessCidrs` to current /8 |
 | open5gs target "down: non-compliant… blank Content-Type" | Prom 3.x strictness | ensure `open5gs-nf` raw scrape job w/ `fallback_scrape_protocol` is present |
 | PDU `OUT_OF_LADN` / SMF "PFCP No Response" | `upf` Service is TCP | UPF Service must be **UDP** (8805 + 2152) |
-| UE `PLMN_NOT_ALLOWED` | subscriber missing (mongo wiped) | `manifests/provision-subscriber.sh`; ensure mongo PVC mounted |
+| UE `PLMN_NOT_ALLOWED` | subscriber missing (mongo wiped) | re-run `manifests/provision-1000-subscribers.sh`; ensure mongo PVC mounted |
 | wrong cluster acted on | kubectl context crossed accounts | `aws eks update-kubeconfig --name open5gs-amp-cluster` before kubectl |
 
 ## Teardown
