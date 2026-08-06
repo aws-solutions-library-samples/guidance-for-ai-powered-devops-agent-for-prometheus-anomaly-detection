@@ -17,10 +17,13 @@ export class NotebookStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    // S3 bucket for notebook files
+    // S3 bucket for notebook files. Explicit BLOCK_ALL — required for burner accounts,
+    // which auto-close on any public S3 bucket. Also enforces TLS at rest.
     const bucket = new s3.Bucket(this, 'NotebookBucket', {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      enforceSSL: true,
     });
 
     // Upload notebook to S3
