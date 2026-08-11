@@ -1,5 +1,7 @@
 boto3>=1.38.7
 requests>=2.32.3
+# Upper bound required: awslabs/prometheus_mcp_server/server.py imports
+# `from mcp.server.fastmcp import Context, FastMCP`, which mcp 2.x removed.
 mcp>=1.0.0,<2.0.0
 pydantic>=2.0.0
 python-dotenv>=1.0.0
