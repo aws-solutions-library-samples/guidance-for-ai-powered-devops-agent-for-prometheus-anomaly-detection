@@ -45,14 +45,47 @@ kubectl apply -f "$HERE/manifests/open5gs-core-multi.yaml"
 
 echo "=== 2. Overlay working configs (dev:eth0 binds, direct-NRF, NSSF fixes, ogstun postStart) ==="
 # Required — the base manifest ships with configs that do not fully work in-cluster.
-kubectl apply -f "$HERE/manifests/open5gs-core-live-fixes.yaml"
+# Capture how many resources actually changed so step 3 can be a no-op on idempotent re-runs.
+OVERLAY_OUT=$(kubectl apply -f "$HERE/manifests/open5gs-core-live-fixes.yaml")
+echo "$OVERLAY_OUT"
+NUM_CHANGED=$(printf '%s\n' "$OVERLAY_OUT" | grep -cE ' (configured|created)$' || true)
 
-echo "=== 3. Restart NFs so they pick up the overlaid configs ==="
-# Deleting the pods (rather than 'rollout restart') so the ReplicaSet recreates with
-# the fresh ConfigMap mount immediately. The dependency-order NFs are handled first.
-for nf in nrf scp nssf ausf udm udr pcf bsf smf upf1 upf2 upf3 upf4 amf1 amf2; do
-  kubectl delete pod -n open5gs -l "app=$nf" --wait=false --ignore-not-found >/dev/null 2>&1 || true
-done
+if [ "${NUM_CHANGED:-0}" -gt 0 ]; then
+  echo "=== 3. $NUM_CHANGED resource(s) changed — restart NFs (cascading gNB scale-down + NRF settle) ==="
+
+  # 3a. If gNBs are already up from a prior run, scale them to 0 FIRST. Otherwise their
+  # SCTP associations to the AMF pods we're about to replace will orphan, and after the
+  # AMF pods come back up on new IPs the gNBs sit in "AMF context not found with id: X"
+  # loops until the paced rollout in step 8 kills them anyway. Kill them cleanly now.
+  GNB_REPLICAS=$(kubectl get statefulset -n open5gs -l 'app in (gnb1a,gnb1b,gnb2a,gnb2b)' \
+    -o jsonpath='{range .items[*]}{.spec.replicas} {end}' 2>/dev/null \
+    | awk '{ for(i=1;i<=NF;i++) s+=$i } END { print s+0 }')
+  if [ "${GNB_REPLICAS:-0}" -gt 0 ]; then
+    echo "  gNBs already deployed ($GNB_REPLICAS replicas) — scaling to 0 first to avoid SCTP orphaning..."
+    for sts in gnb1a gnb1b gnb2a gnb2b; do
+      kubectl scale statefulset/$sts -n open5gs --replicas=0 >/dev/null 2>&1 || true
+    done
+    kubectl wait --for=delete pod -n open5gs -l 'app in (gnb1a,gnb1b,gnb2a,gnb2b)' --timeout=180s 2>/dev/null || true
+  fi
+
+  # 3b. Delete the NF pods (rather than 'rollout restart') so the ReplicaSet recreates
+  # with the fresh ConfigMap mount immediately. Order-independent — dependency ordering
+  # is handled by NRF re-registration, which we wait for below.
+  # Cascades UDM + AUSF so their per-UE state pools (impi/impu contexts) are cleared;
+  # without this, "No memory pool" HTTP 400 rejections accumulate across re-runs.
+  for nf in nrf scp nssf ausf udm udr pcf bsf smf upf1 upf2 upf3 upf4 amf1 amf2; do
+    kubectl delete pod -n open5gs -l "app=$nf" --wait=false --ignore-not-found >/dev/null 2>&1 || true
+  done
+
+  # 3c. Wait for NRF re-registration to propagate. NFs' readiness probes go green as soon
+  # as their SBI listener binds, but the NF isn't discoverable via NRF until the heartbeat
+  # subscription completes. If step 4 races ahead, AMF's first NF-Discover for SMF returns
+  # HTTP 400 and every incoming UE gets Registration reject [95].
+  echo "  waiting 30s for NF re-registration to NRF to propagate..."
+  sleep 30
+else
+  echo "=== 3. Configs unchanged — skipping NF restart (idempotent re-run) ==="
+fi
 
 echo "=== 4. Wait for the control-plane and data-plane NFs to be Ready ==="
 for d in mongodb nrf smf amf1 amf2 upf1 upf2 upf3 upf4; do
