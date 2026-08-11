@@ -14,3 +14,7 @@ lambda-mcp-wrapper/lambda/*
 !lambda-mcp-wrapper/lambda/awslabs/
 !lambda-mcp-wrapper/lambda/*.py
 !lambda-mcp-wrapper/lambda/requirements.txt
+
+# Generated during `cdk synth` (api-gateway-lambda-stack.ts) with unresolved CDK tokens,
+# and not consumed by the deploy flow (deploy/20 reads live CloudFormation outputs). Don't track.
+mcp-server-config.json

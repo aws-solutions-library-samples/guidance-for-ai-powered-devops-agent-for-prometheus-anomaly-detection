@@ -1,7 +1,7 @@
 import json
 import boto3
 from datetime import datetime
-from lambda_function import handler as mcp_handler
+from lambda_function_v2 import handler as mcp_handler  # module is lambda_function_v2 (no lambda_function.py)
 
 def handler(event, context):
     """API Gateway compatible handler for Prometheus MCP server"""
