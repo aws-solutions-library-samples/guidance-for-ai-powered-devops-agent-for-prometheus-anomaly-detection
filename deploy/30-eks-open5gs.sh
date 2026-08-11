@@ -67,6 +67,11 @@ YAML
   rm -f "$CFG"
 fi
 
+# Isolate kubectl from parallel shells: give this run its own kubeconfig so a concurrent
+# `aws eks update-kubeconfig` (another deploy step, another terminal) can't switch our
+# current-context mid-run. Prevents transient "namespaces X not found" / auth errors.
+export KUBECONFIG="$(mktemp -t open5gs-deploy-kubeconfig-XXXX)"
+trap 'rm -f "$KUBECONFIG"' EXIT
 aws eks update-kubeconfig --region "$AWS_REGION" --name "$CLUSTER"
 kubectl wait --for=condition=Ready nodes --all --timeout=10m
 

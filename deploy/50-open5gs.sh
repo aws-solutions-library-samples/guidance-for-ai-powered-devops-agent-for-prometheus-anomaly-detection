@@ -30,6 +30,13 @@ for bin in aws kubectl; do
 done
 
 echo "=== point kubeconfig at $CLUSTER (avoid cross-account context bugs) ==="
+# Give THIS run its own kubeconfig file so a concurrent `aws eks update-kubeconfig` in
+# another shell (or another deploy step) can't switch our current-context out from under
+# us mid-script. This was the actual root cause of transient "namespaces open5gs not
+# found" errors in step 4: kubectl was silently pointed at a different cluster after
+# another aws eks update-kubeconfig ran against ~/.kube/config in parallel.
+export KUBECONFIG="$(mktemp -t open5gs-deploy-kubeconfig-XXXX)"
+trap 'rm -f "$KUBECONFIG"' EXIT
 aws eks update-kubeconfig --region "$R" --name "$CLUSTER" >/dev/null
 kubectl config current-context
 
