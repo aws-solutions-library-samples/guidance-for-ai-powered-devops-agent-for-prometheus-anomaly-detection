@@ -116,7 +116,11 @@ class StdioAdapter:
                 tool_def = {
                     'name': tool.name,
                     'description': tool.description or '',
-                    'inputSchema': tool.parameters_json_schema if hasattr(tool, 'parameters_json_schema') else {
+                    # FastMCP's Tool model exposes the JSON schema as `parameters`
+                    # (there is no `parameters_json_schema`). Using the wrong attribute made
+                    # every tool advertise an empty inputSchema, so MCP clients (including the
+                    # DevOps Agent) could not discover tool arguments (workspace_id, query, ...).
+                    'inputSchema': tool.parameters if hasattr(tool, 'parameters') else {
                         'type': 'object',
                         'properties': {}
                     }
