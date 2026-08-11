@@ -2,7 +2,11 @@
 # Deploy AMP workspace + Prometheus MCP (Cognito + Lambda + API Gateway).
 set -euo pipefail
 : "${AWS_PROFILE:=default}"; export AWS_PROFILE
-: "${AWS_REGION:=us-east-1}"; export CDK_DEFAULT_REGION="$AWS_REGION"
+# Set BOTH AWS_REGION and AWS_DEFAULT_REGION so the whole SDK/CLI resolution chain honors us-east-1
+# even when ~/.aws/config's [default] block has a different region — otherwise CDK's outer SDK
+# resolver reads ~/.aws/config first and picks the wrong region despite CDK_DEFAULT_REGION being set.
+: "${AWS_REGION:=us-east-1}"
+export AWS_REGION AWS_DEFAULT_REGION="$AWS_REGION" CDK_DEFAULT_REGION="$AWS_REGION"
 export CDK_DEFAULT_ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
 cd "$(dirname "$0")/../cdk"
 # Re-vendor Python deps into the Lambda asset dirs (not committed to git).

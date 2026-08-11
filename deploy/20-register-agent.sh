@@ -3,7 +3,9 @@
 # Reads CDK stack outputs + Cognito secret at runtime; NEVER creates an Agent Space.
 set -euo pipefail
 : "${AWS_PROFILE:=default}"; export AWS_PROFILE
+# Export BOTH so AWS SDK/CLI resolution honors this region even if ~/.aws/config default differs.
 : "${AWS_REGION:=us-east-1}"
+export AWS_REGION AWS_DEFAULT_REGION="$AWS_REGION"
 out(){ aws cloudformation describe-stacks --region "$AWS_REGION" --stack-name "$1" --query "Stacks[0].Outputs[?OutputKey=='$2'].OutputValue" --output text; }
 MCP=$(out PrometheusLambdaMCPAPIGatewayStack MCPEndpoint)
 POOL=$(out PrometheusLambdaMCPCognitoStack UserPoolId)

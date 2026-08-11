@@ -2,7 +2,9 @@
 # Verify: (1) metrics in AMP via SigV4, (2) agent path via MCP (OAuth2 -> /mcp -> AMP).
 set -euo pipefail
 : "${AWS_PROFILE:=default}"; export AWS_PROFILE
+# Export BOTH so AWS SDK/CLI resolution honors this region even if ~/.aws/config default differs.
 : "${AWS_REGION:=us-east-1}"
+export AWS_REGION AWS_DEFAULT_REGION="$AWS_REGION"
 WS=$(aws cloudformation describe-stacks --region "$AWS_REGION" --stack-name Open5gsAmpStack --query "Stacks[0].Outputs[?OutputKey=='WorkspaceId'].OutputValue" --output text)
 echo "AMP workspace: $WS  — query count(up):"
 python3 - "$WS" "$AWS_REGION" <<'PY'
