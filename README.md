@@ -94,13 +94,13 @@ These instructions are written for **macOS or Linux** with a Bash shell.
   ```bash
   export AWS_PROFILE=your-profile        # no profile is hardcoded anywhere
   ```
-- **Node.js 18+** and the **AWS CDK CLI** (`npm install -g aws-cdk`)
+- **Node.js 18+**. The AWS CDK CLI is installed locally in `cdk/node_modules` and invoked via `npx cdk` throughout — a global `aws-cdk` install is optional. If you want it globally: `npm install -g aws-cdk`.
 - **kubectl**, **eksctl**, **Helm 3**, **Python 3.10+**
 
 ### AWS account requirements
 
 - An AWS account with permissions to create Amazon EKS, AMP, SageMaker, Lambda, SNS, API Gateway, Cognito, Secrets Manager, and IAM resources.
-- CDK bootstrapped in your account/Region: `cd cdk && cdk bootstrap`.
+- CDK bootstrapped in your account/Region: `cd cdk && npx cdk bootstrap`.
 - **AWS DevOps Agent (only for the automated-investigation path — optional):**
   1. **Enable the AWS DevOps Agent** in the console and **create an Agent Space** (an account-level, console/identity-scoped action with no CloudFormation support — it is intentionally left to the operator).
   2. **Generate a webhook** in the Agent Space (choose **HMAC** — recommended — or **API key** auth) and copy the URL + secret.
@@ -120,7 +120,7 @@ The `deploy/` scripts are numbered in run order. Set your profile first: `export
 
 ```bash
 # 1. Control plane — AMP + RCF + automated RCA pipeline + Prometheus MCP + SageMaker notebook (CDK)
-./deploy/10-deploy-cdk.sh          # or: cd cdk && npm install && cdk bootstrap && cdk deploy --all --require-approval never
+./deploy/10-deploy-cdk.sh          # or: cd cdk && npm install && npx cdk bootstrap && npx cdk deploy --all --require-approval never
 
 # 2. (Optional) Register the Prometheus MCP with the AWS DevOps Agent (register-only; see Prerequisites)
 ./deploy/20-register-agent.sh      # skips gracefully if the account isn't allow-listed
@@ -196,7 +196,7 @@ kubectl delete -f manifests/open5gs-core-multi.yaml
 eksctl delete cluster --name open5gs-amp-cluster
 
 # All CDK resources (AMP, RCA pipeline SNS/Lambda/secret, MCP, notebook)
-cd cdk && cdk destroy --all
+cd cdk && npx cdk destroy --all
 ```
 
 ## FAQ and Known Issues
