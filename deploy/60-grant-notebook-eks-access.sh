@@ -6,6 +6,11 @@ set -euo pipefail
 
 REGION="${REGION:-us-east-1}"
 CLUSTER="${CLUSTER:-open5gs-amp-cluster}"
+# Export BOTH AWS_REGION and AWS_DEFAULT_REGION so the child `cdk deploy` invocation below
+# resolves to this region even when ~/.aws/config's [default] block has a different region.
+# Without AWS_DEFAULT_REGION, CDK's outer SDK resolver reads the config file's [default]
+# region and deploys the notebook stack to the wrong region.
+export AWS_REGION="$REGION" AWS_DEFAULT_REGION="$REGION" CDK_DEFAULT_REGION="$REGION"
 
 echo "Finding SageMaker notebook IAM role..."
 ROLE=$(aws sagemaker describe-notebook-instance \

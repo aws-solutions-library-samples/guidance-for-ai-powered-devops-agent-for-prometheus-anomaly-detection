@@ -15,6 +15,9 @@ set -euo pipefail
 : "${AWS_PROFILE:=default}"
 export AWS_PROFILE
 REGION="${AWS_REGION:-us-east-1}"
+# Export BOTH so any child aws-cli/aws-sdk calls resolve to this region even when
+# ~/.aws/config's [default] block has a different region.
+export AWS_REGION="$REGION" AWS_DEFAULT_REGION="$REGION"
 STACK="${STACK:-Open5gsAmpStack}"
 SECRET_ID="open5gs/devops-agent/webhook"
 LAMBDA="open5gs-rcf-agent-forwarder"
