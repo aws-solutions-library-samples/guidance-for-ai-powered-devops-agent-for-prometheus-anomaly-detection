@@ -4,8 +4,6 @@
 > The published deployment steps live in [`../README.md`](../README.md) and [`../setup_guide.md`](../setup_guide.md).
 > Resource IDs below are placeholders (`<...>`); real values are discovered at runtime from stack outputs.
 > Last updated: 2026-06-23.
-> Repo: `git@ssh.gitlab.aws.dev:mdsherif/ai-powered-devops-agent-for-prometheus-anomaly-detection.git` (branch `main`).
-> Local: `06Tools/24-ai-devops-amp` (keep the path SHORT — long WorkDocs paths break CDK/npm).
 
 ---
 
