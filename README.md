@@ -119,6 +119,11 @@ This Guidance defaults to **`us-east-1`** and is Region-overridable (`export AWS
 The `deploy/` scripts are numbered in run order. Set your profile first: `export AWS_PROFILE=your-profile`.
 
 ```bash
+# 0. Clone the repository
+git clone https://github.com/aws-solutions-library-samples/guidance-for-5g-network-anomaly-detection-and-automated-root-cause-analysis-on-aws.git
+cd guidance-for-5g-network-anomaly-detection-and-automated-root-cause-analysis-on-aws
+export AWS_PROFILE=your-profile
+
 # 1. Control plane — AMP + RCF + automated RCA pipeline + Prometheus MCP + SageMaker notebook (CDK)
 ./deploy/10-deploy-cdk.sh          # or: cd cdk && npm install && npx cdk bootstrap && npx cdk deploy --all --require-approval never
 
