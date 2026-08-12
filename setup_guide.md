@@ -25,7 +25,7 @@ Registers the MCP as a capability provider (OAuth2) so the agent can *query* AMP
 > **Prerequisite / preview gate:** first **enable the AWS DevOps Agent** and create an Agent Space in the
 > console. The `register-service` API is a **gated preview** — if the account isn't allow-listed you'll get
 > `AccessDeniedException … Only external and exempted accounts are allowed`. This step is **optional**: the
-> script skips gracefully, and the agent is still *triggered* by the webhook (`deploy/70-wire-agent-webhook.sh`).
+> script skips gracefully, and the agent is still *triggered* by the webhook (wired via the notebook's Step 2 cell).
 
 ### 3. EKS cluster + Prometheus agent → AMP
 ```bash

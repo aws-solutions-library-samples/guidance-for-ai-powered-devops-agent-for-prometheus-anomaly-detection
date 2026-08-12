@@ -49,17 +49,11 @@ aws eks update-kubeconfig --region us-east-1 --name open5gs-amp-cluster
 ### 1. Set up & wire the AWS DevOps Agent  ← do this BEFORE the fault
 So the anomaly **automatically launches an investigation**, wire the agent first:
 1. **Create an Agent Space** in the AWS DevOps Agent console (isolated workspace: account access, users, data, chat history).
-2. **Add the Prometheus MCP** as a capability provider, pointing at the `/mcp` API Gateway endpoint this project deployed (OAuth2 client-credentials from the Cognito stack):
+2. **Add the Prometheus MCP** as a capability provider, pointing at the `/mcp` API Gateway endpoint this project deployed (OAuth2 client-credentials from the Cognito stack). This automatically generates a **webhook URL + secret** (shown only once) — copy them.
    ```bash
-   ./deploy/20-register-agent.sh
+   ./deploy/20-register-agent.sh   # optional: registers the MCP via API (gated preview)
    ```
-3. **Generate a webhook** — Agent Space → Capabilities → Webhook → *Generate webhook*. Pick an auth type:
-   **HMAC** (recommended — signed, verified via `x-amzn-event-signature`) or **API key** (`Authorization: Bearer`). Copy the URL + secret (shown once).
-4. **Wire it** so the forwarder Lambda posts incidents to the agent (secret is read at runtime — no redeploy):
-   ```bash
-   ./deploy/70-wire-agent-webhook.sh        # prompts for URL + secret (hidden) + auth type
-   ```
-   (Or run the notebook's **Step 2** wiring cell.) Stores `{url, token, auth}` in Secrets Manager `open5gs/devops-agent/webhook`.
+3. **Wire the webhook** — paste the URL + secret into the notebook's **Step 2** placeholder cell, set the auth type (`hmac` or `bearer`), and run the wiring cell. This stores `{url, token, auth}` in Secrets Manager (`open5gs/devops-agent/webhook`), which the forwarder Lambda reads at runtime.
 
 ### 2. Verify baseline (before fault)
 ```bash

@@ -103,7 +103,7 @@ These instructions are written for **macOS or Linux** with a Bash shell.
 - CDK bootstrapped in your account/Region: `cd cdk && npx cdk bootstrap`.
 - **AWS DevOps Agent (only for the automated-investigation path — optional):**
   1. **Enable the AWS DevOps Agent** in the console and **create an Agent Space** (an account-level, console/identity-scoped action with no CloudFormation support — it is intentionally left to the operator).
-  2. **Generate a webhook** in the Agent Space (choose **HMAC** — recommended — or **API key** auth) and copy the URL + secret.
+  2. **Add the Prometheus MCP** as a capability in the Agent Space (pointing at the API Gateway endpoint deployed by CDK). This automatically generates a **webhook URL + secret** — copy them (the secret is shown only once).
   3. To register the Prometheus MCP as a capability provider (`deploy/20-register-agent.sh`), your account must be **allow-listed for the `devops-agent register-service` API**, which is currently a **gated preview**. If it is not, you will see:
      ```
      AccessDeniedException … Account <id> is not authorized. Only external accounts and exempted accounts are allowed at this time.
@@ -156,7 +156,7 @@ aws cloudformation describe-stacks --query "Stacks[].StackName" --output text
 Open **SageMaker → Notebook Instances → `open5gs-rcf-anomaly-demo` → Open Jupyter** and run `rcf-anomaly-detection-demo.ipynb`. The notebook is ordered so the DevOps Agent is wired **before** the fault:
 
 1. **Step 1** — verify the healthy baseline (1000 subscribers registered, RCF score 0).
-2. **Step 2 — Set up & wire the AWS DevOps Agent (before the fault).** Follow the in-notebook guidance to create the Agent Space, add the MCP capability, and generate a webhook. Paste the **webhook URL + secret** into the placeholder cell, set the auth type (`hmac` or `bearer`), and run the **wiring cell** — it stores `{url, token, auth}` in Secrets Manager (`open5gs/devops-agent/webhook`), which the forwarder Lambda reads at runtime.
+2. **Step 2 — Set up & wire the AWS DevOps Agent (before the fault).** The CDK stack already deployed the OAuth2-secured Prometheus MCP (API Gateway + Cognito + Lambda). In the console, create an Agent Space and add the MCP endpoint as a capability — this automatically generates a webhook URL + secret (shown only once). Paste them into the notebook's placeholder cell and run the **wiring cell** — it stores `{url, token, auth}` in Secrets Manager (`open5gs/devops-agent/webhook`), which the forwarder Lambda reads at runtime.
 3. **Step 3** — inject the fault (bad config → AMF1 CrashLoopBackOff → ~500 subscribers drop).
 4. **Step 4** — observe the anomaly (the RCF score spikes; use the range query in UTC to catch the single-cycle spike).
 5. **Step 5 — the DevOps Agent investigates automatically.** The RCF alert → SNS → forwarder Lambda → your webhook, and the agent runs the full autonomous investigation. Open **Agent Space → Incidents** to watch it; the notebook also confirms the webhook is wired and prints the ground-truth signals so you can compare the agent's conclusion.
@@ -180,7 +180,6 @@ If no webhook is configured, the forwarder Lambda logs the alert to CloudWatch a
 
 ## Next Steps
 
-- Wire the DevOps Agent webhook (Step 2 / `deploy/70-wire-agent-webhook.sh`) once your Agent Space exists, to see the fully autonomous investigation.
 - Add more RCF detectors (session count per UPF, PDU-session establishment rate) for richer anomaly coverage.
 - Extend the forwarder Lambda to attach additional context (recent ConfigMap changes, node conditions) to the incident payload it posts.
 - Adapt the pattern to your own workload: point Prometheus/AMP at your metrics, define an RCF detector on your key SLI, and reuse the SNS → Lambda → DevOps Agent bridge.

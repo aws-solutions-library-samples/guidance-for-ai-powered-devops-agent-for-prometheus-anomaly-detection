@@ -83,7 +83,7 @@ def handler(event, context):
     if not url:
         print(
             "NOTE: agent webhook not configured (secret empty + env unset) -> nothing forwarded. "
-            "Fill the Secrets Manager secret via deploy/70-wire-agent-webhook.sh. Alert: " + summary
+            "Fill the Secrets Manager secret via the notebook Step 2 wiring cell. Alert: " + summary
         )
         return {"statusCode": 200}
 

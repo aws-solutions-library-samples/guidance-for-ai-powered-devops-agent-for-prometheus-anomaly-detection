@@ -19,7 +19,7 @@ import { Construct } from 'constructs';
  * - Alert-forwarding pipeline: SNS topic -> Lambda that forwards the incident to the
  *   (identifies which AMF dropped via AMP) and forwards an incident to the DevOps Agent
  *   webhook. The webhook {url,token} lives in a Secrets Manager secret that a human fills
- *   in AFTER creating the Agent Space (console or deploy/70-wire-agent-webhook.sh) — the
+ *   in AFTER creating the Agent Space (console or the notebook's Step 2 wiring cell) — the
  *   real value never flows through CDK/CloudFormation.
  */
 export class AmpStack extends cdk.Stack {
@@ -131,11 +131,11 @@ export class AmpStack extends cdk.Stack {
 
     // Secrets Manager secret holding the DevOps Agent Space webhook {url, token}.
     // Created as an empty placeholder; a human fills it in AFTER creating the Agent Space
-    // (Secrets Manager console or deploy/70-wire-agent-webhook.sh). The real value never
+    // (Secrets Manager console or the notebook's Step 2 wiring cell). The real value never
     // flows through CDK/CloudFormation, and rotating it needs no redeploy.
     const agentSecret = new secretsmanager.Secret(this, 'AgentWebhookSecret', {
       secretName: 'open5gs/devops-agent/webhook',
-      description: 'DevOps Agent Space webhook url+token; filled in post-deploy via deploy/70-wire-agent-webhook.sh',
+      description: 'DevOps Agent Space webhook url+token; filled in post-deploy via the notebook Step 2 wiring cell',
       secretStringValue: cdk.SecretValue.unsafePlainText(JSON.stringify({ url: '', token: '' })),
     });
 
@@ -170,7 +170,7 @@ export class AmpStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'ForwarderLambdaName', { value: forwarderFn.functionName });
     new cdk.CfnOutput(this, 'AgentWebhookSecretName', { value: agentSecret.secretName });
     new cdk.CfnOutput(this, 'DevopsAgentWebhook', {
-      value: 'fill via deploy/70-wire-agent-webhook.sh (Secrets Manager: open5gs/devops-agent/webhook)',
+      value: 'fill via the notebook Step 2 wiring cell (Secrets Manager: open5gs/devops-agent/webhook)',
     });
   }
 }
