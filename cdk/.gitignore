@@ -17,4 +17,6 @@ lambda-mcp-wrapper/lambda/*
 
 # Generated during `cdk synth` (api-gateway-lambda-stack.ts) with unresolved CDK tokens,
 # and not consumed by the deploy flow (deploy/20 reads live CloudFormation outputs). Don't track.
-mcp-server-config.json
+mcp-server-config.json# Vendored deps (installed at deploy time by deploy/10-deploy-cdk.sh)
+lambda-mcp-wrapper/lambda/six.py
+lambda-mcp-wrapper/lambda/typing_extensions.py

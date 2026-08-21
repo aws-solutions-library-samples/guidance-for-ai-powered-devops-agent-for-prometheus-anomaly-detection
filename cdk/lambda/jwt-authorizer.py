@@ -18,7 +18,7 @@ def lambda_handler(event, context):
     try:
         token = event['authorizationToken'].replace('Bearer ', '')
         user_pool_id = os.environ['USER_POOL_ID']
-        region = os.environ.get('AWS_REGION', 'us-west-2')  # AWS_REGION is set by Lambda runtime
+        region = os.environ.get('AWS_REGION', 'us-east-1')  # AWS_REGION is set by Lambda runtime
         expected_issuer = os.environ['COGNITO_ISSUER']
         required_scopes = set(os.environ['REQUIRED_SCOPES'].split())
         

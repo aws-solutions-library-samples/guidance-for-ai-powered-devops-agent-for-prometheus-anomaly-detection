@@ -2,7 +2,7 @@
 
 **Author:** Mohamed Sherif (mdsherif)
 **Date:** 2026-08-17
-**BuilderSpace:** https://builderspace.aws.dev/project/9797c2a7-3823-4c92-ae32-7c6314d82234
+**BuilderSpace:** <BuilderSpace project>
 **Repo:** https://github.com/aws-solutions-library-samples/guidance-for-ai-powered-devops-agent-for-prometheus-anomaly-detection
 
 ---
