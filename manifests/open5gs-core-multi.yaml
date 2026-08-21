@@ -22,7 +22,7 @@ spec:
     spec:
       containers:
       - name: mongodb
-        image: public.ecr.aws/a7y4t3f5/telco-buddy/mongo:6.0
+        image: mongo:6.0
         ports: [{containerPort: 27017}]
         volumeMounts: [{name: data, mountPath: /data/db}]
       volumes: [{name: data, persistentVolumeClaim: {claimName: mongodb-data}}]
@@ -48,7 +48,7 @@ spec:
     metadata: {labels: {app: nrf, nf: nrf}}
     spec:
       containers:
-      - {name: nrf, image: "public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6", command: ["/opt/open5gs/bin/open5gs-nrfd"], ports: [{containerPort: 7777}]}
+      - {name: nrf, image: "gradiant/open5gs:2.6.6", command: ["/opt/open5gs/bin/open5gs-nrfd"], ports: [{containerPort: 7777}]}
 ---
 apiVersion: v1
 kind: Service
@@ -65,7 +65,7 @@ spec:
     metadata: {labels: {app: scp, nf: scp}}
     spec:
       containers:
-      - {name: scp, image: "public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6", command: ["/opt/open5gs/bin/open5gs-scpd"], ports: [{containerPort: 7777}]}
+      - {name: scp, image: "gradiant/open5gs:2.6.6", command: ["/opt/open5gs/bin/open5gs-scpd"], ports: [{containerPort: 7777}]}
 ---
 apiVersion: v1
 kind: Service
@@ -82,7 +82,7 @@ spec:
     metadata: {labels: {app: ausf, nf: ausf}}
     spec:
       containers:
-      - {name: ausf, image: "public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6", command: ["/opt/open5gs/bin/open5gs-ausfd"], ports: [{containerPort: 7777}]}
+      - {name: ausf, image: "gradiant/open5gs:2.6.6", command: ["/opt/open5gs/bin/open5gs-ausfd"], ports: [{containerPort: 7777}]}
 ---
 apiVersion: v1
 kind: Service
@@ -99,7 +99,7 @@ spec:
     metadata: {labels: {app: udm, nf: udm}}
     spec:
       containers:
-      - {name: udm, image: "public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6", command: ["/opt/open5gs/bin/open5gs-udmd"], ports: [{containerPort: 7777}]}
+      - {name: udm, image: "gradiant/open5gs:2.6.6", command: ["/opt/open5gs/bin/open5gs-udmd"], ports: [{containerPort: 7777}]}
 ---
 apiVersion: v1
 kind: Service
@@ -117,7 +117,7 @@ spec:
     spec:
       containers:
       - name: udr
-        image: public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6
+        image: gradiant/open5gs:2.6.6
         command: ["/opt/open5gs/bin/open5gs-udrd"]
         ports: [{containerPort: 7777}]
         env: [{name: DB_URI, value: "mongodb://mongodb.open5gs.svc.cluster.local/open5gs"}]
@@ -138,7 +138,7 @@ spec:
     spec:
       containers:
       - name: pcf
-        image: public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6
+        image: gradiant/open5gs:2.6.6
         command: ["/opt/open5gs/bin/open5gs-pcfd"]
         ports: [{containerPort: 7777}]
         env: [{name: DB_URI, value: "mongodb://mongodb.open5gs.svc.cluster.local/open5gs"}]
@@ -158,7 +158,7 @@ spec:
     metadata: {labels: {app: nssf, nf: nssf}}
     spec:
       containers:
-      - {name: nssf, image: "public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6", command: ["/opt/open5gs/bin/open5gs-nssfd"], ports: [{containerPort: 7777}]}
+      - {name: nssf, image: "gradiant/open5gs:2.6.6", command: ["/opt/open5gs/bin/open5gs-nssfd"], ports: [{containerPort: 7777}]}
 ---
 apiVersion: v1
 kind: Service
@@ -176,7 +176,7 @@ spec:
     spec:
       containers:
       - name: bsf
-        image: public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6
+        image: gradiant/open5gs:2.6.6
         command: ["/opt/open5gs/bin/open5gs-bsfd"]
         ports: [{containerPort: 7777}]
         env: [{name: DB_URI, value: "mongodb://mongodb.open5gs.svc.cluster.local/open5gs"}]
@@ -230,7 +230,7 @@ spec:
     spec:
       containers:
       - name: amf
-        image: public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6
+        image: gradiant/open5gs:2.6.6
         command: ["/opt/open5gs/bin/open5gs-amfd", "-c", "/config/amf.yaml"]
         ports: [{containerPort: 38412, protocol: SCTP}, {containerPort: 9090}]
         volumeMounts: [{name: cfg, mountPath: /config}]
@@ -289,7 +289,7 @@ spec:
     spec:
       containers:
       - name: amf
-        image: public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6
+        image: gradiant/open5gs:2.6.6
         command: ["/opt/open5gs/bin/open5gs-amfd", "-c", "/config/amf.yaml"]
         ports: [{containerPort: 38412, protocol: SCTP}, {containerPort: 9090}]
         volumeMounts: [{name: cfg, mountPath: /config}]
@@ -358,7 +358,7 @@ spec:
     spec:
       containers:
       - name: smf
-        image: public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6
+        image: gradiant/open5gs:2.6.6
         command: ["/opt/open5gs/bin/open5gs-smfd", "-c", "/config/smf.yaml"]
         ports: [{containerPort: 8805, protocol: UDP}, {containerPort: 9090}]
         volumeMounts: [{name: cfg, mountPath: /config}]
@@ -403,7 +403,7 @@ spec:
     spec:
       containers:
       - name: upf
-        image: public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6
+        image: gradiant/open5gs:2.6.6
         command: ["/opt/open5gs/bin/open5gs-upfd", "-c", "/config/upf.yaml"]
         ports: [{containerPort: 8805, protocol: UDP}, {containerPort: 2152, protocol: UDP}, {containerPort: 9090}]
         securityContext: {capabilities: {add: [NET_ADMIN]}, privileged: true}
@@ -450,7 +450,7 @@ spec:
     spec:
       containers:
       - name: upf
-        image: public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6
+        image: gradiant/open5gs:2.6.6
         command: ["/opt/open5gs/bin/open5gs-upfd", "-c", "/config/upf.yaml"]
         ports: [{containerPort: 8805, protocol: UDP}, {containerPort: 2152, protocol: UDP}, {containerPort: 9090}]
         securityContext: {capabilities: {add: [NET_ADMIN]}, privileged: true}
@@ -497,7 +497,7 @@ spec:
     spec:
       containers:
       - name: upf
-        image: public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6
+        image: gradiant/open5gs:2.6.6
         command: ["/opt/open5gs/bin/open5gs-upfd", "-c", "/config/upf.yaml"]
         ports: [{containerPort: 8805, protocol: UDP}, {containerPort: 2152, protocol: UDP}, {containerPort: 9090}]
         securityContext: {capabilities: {add: [NET_ADMIN]}, privileged: true}
@@ -544,7 +544,7 @@ spec:
     spec:
       containers:
       - name: upf
-        image: public.ecr.aws/a7y4t3f5/telco-buddy/open5gs:2.6.6
+        image: gradiant/open5gs:2.6.6
         command: ["/opt/open5gs/bin/open5gs-upfd", "-c", "/config/upf.yaml"]
         ports: [{containerPort: 8805, protocol: UDP}, {containerPort: 2152, protocol: UDP}, {containerPort: 9090}]
         securityContext: {capabilities: {add: [NET_ADMIN]}, privileged: true}
