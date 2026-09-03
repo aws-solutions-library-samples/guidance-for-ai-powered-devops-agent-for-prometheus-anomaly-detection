@@ -119,7 +119,7 @@ def handler(event, context):
             headers["Authorization"] = f"Bearer {token}"
         wr = urllib.request.Request(url, data=body.encode("utf-8"), headers=headers, method="POST")
         with urllib.request.urlopen(wr, timeout=15) as resp:
-            print(f"Agent webhook status: {resp.status} (auth={auth or 'bearer/none'}) -> DevOps Agent will investigate.")
+            print(f"Agent webhook status: {resp.status} -> DevOps Agent will investigate.")
     except Exception as e:  # noqa: BLE001
         print("Agent webhook POST failed:", str(e))
 
