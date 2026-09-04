@@ -120,8 +120,8 @@ The `deploy/` scripts are numbered in run order. Set your profile first: `export
 
 ```bash
 # 0. Clone the repository
-git clone https://github.com/aws-solutions-library-samples/guidance-for-5g-network-anomaly-detection-and-automated-root-cause-analysis-on-aws.git
-cd guidance-for-5g-network-anomaly-detection-and-automated-root-cause-analysis-on-aws
+git clone https://github.com/aws-solutions-library-samples/guidance-for-ai-powered-devops-agent-for-prometheus-anomaly-detection.git
+cd guidance-for-ai-powered-devops-agent-for-prometheus-anomaly-detection
 export AWS_PROFILE=your-profile
 
 # 1. Control plane — AMP + RCF + automated RCA pipeline + Prometheus MCP + SageMaker notebook (CDK)
@@ -235,4 +235,3 @@ This Guidance **deploys** third-party open source software to demonstrate the pa
 
 - [`docs/DEMO-RUNBOOK.md`](docs/DEMO-RUNBOOK.md) — step-by-step demo with correlation queries
 - [`setup_guide.md`](setup_guide.md) — detailed deploy / verify / troubleshoot guide
-- [`docs/CONTEXT.md`](docs/CONTEXT.md) — internal engineering reference (not required for deployment)
